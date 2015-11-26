@@ -98,7 +98,7 @@ and string = parse
 
 and bigComment = parse
   | "*/" { next_token lexbuf }
-  | '\n' { newline lexbuf; bigComent lexbuf }
+  | '\n' { newline lexbuf; bigComment lexbuf }
   | _    { bigComment lexbuf }
 
 {

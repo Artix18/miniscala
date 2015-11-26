@@ -1,5 +1,5 @@
 
-(* Analyseur lexical pour Mini-Scala *)
+(* Analyseur lexical pour Petit Scala *)
 
 {
   open Lexing
