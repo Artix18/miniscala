@@ -1,43 +1,14 @@
-CMO=lexer.cmo parser.cmo interp.cmo main.cmo
-GENERATED = lexer.ml parser.ml parser.mli
-FLAGS=-annot -g
+all:
+	ocamlopt -o ast ast.mli
+	menhir --infer parser.mly
+	ocamllex lexer.mll
+	rm parser.mli
+	ocamlopt -o main parser.ml lexer.ml main.ml
+	
+	
+	for f in exec/*.scala; do ./main $$f; done
 
-all: mini-python
-	./mini-python test.py
-
-.PHONY: tests
-tests: mini-python
-	bash run-tests
-
-mini-python: $(CMO)
-	ocamlc $(FLAGS) -o $@ nums.cma $(CMO)
-
-.SUFFIXES: .mli .ml .cmi .cmo .mll .mly
-
-.mli.cmi:
-	ocamlc $(FLAGS) -c  $<
-
-.ml.cmo:
-	ocamlc $(FLAGS) -c $<
-
-.mll.ml:
-	ocamllex $<
-
-.mly.ml:
-	menhir -v $<
-
-.mly.mli:
-	menhir -v $<
-
-clean:
-	rm -f *.cm[io] *.o *.annot *~ mini-python $(GENERATED)
-	rm -f parser.output parser.automaton
-
-.depend depend:$(GENERATED)
-	rm -f .depend
-	ocamldep *.ml *.mli > .depend
-
-include .depend
-
-
-
+clean :
+	rm -rf main *.cmo *.mli *.cmi *.cmx *~ *.o
+	rm parser.ml lexer.ml
+	rm a.out ast
