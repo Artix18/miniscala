@@ -1,0 +1,76 @@
+
+** Conflict (shift/reduce) in state 67.
+** Token involved: RSQ
+** This state is reached from file after reading:
+
+list(clas) OBJECT IDENT LBRA option(OVERRIDE) DEF IDENT loption(delimited(LSQ,separated_nonempty_list(COMMA,param_type),RSQ)) LP loption(separated_nonempty_list(COMMA,param)) RP LSQ left_value 
+
+** The derivations that appear below have the following common factor:
+** (The question mark symbol (?) represents the spot where the derivations begin to differ.)
+
+file 
+list(clas) class_Main EOF 
+           OBJECT IDENT LBRA loption(separated_nonempty_list(SEMICOLON,decl)) RBRA 
+                             separated_nonempty_list(SEMICOLON,decl) 
+                             decl 
+                             methode 
+                             (?)
+
+** In state 67, looking ahead at RSQ, reducing production
+** expr -> left_value 
+** is permitted because of the following sub-derivation:
+
+option(OVERRIDE) DEF IDENT loption(delimited(LSQ,separated_nonempty_list(COMMA,param_type),RSQ)) LP loption(separated_nonempty_list(COMMA,param)) RP LSQ loption(separated_nonempty_list(SEMICOLON,instruction)) RSQ // lookahead token appears
+                                                                                                                                                         separated_nonempty_list(SEMICOLON,instruction) // lookahead token is inherited
+                                                                                                                                                         instruction // lookahead token is inherited
+                                                                                                                                                         expr // lookahead token is inherited
+                                                                                                                                                         left_value . 
+
+** In state 67, looking ahead at RSQ, shifting is permitted
+** because of the following sub-derivation:
+
+option(OVERRIDE) DEF IDENT loption(delimited(LSQ,separated_nonempty_list(COMMA,param_type),RSQ)) LP loption(separated_nonempty_list(COMMA,param)) RP LSQ loption(separated_nonempty_list(SEMICOLON,instruction)) RSQ 
+                                                                                                                                                         separated_nonempty_list(SEMICOLON,instruction) 
+                                                                                                                                                         instruction 
+                                                                                                                                                         expr 
+                                                                                                                                                         left_value args_type LP loption(separated_nonempty_list(COMMA,expr)) RP 
+                                                                                                                                                                    loption(delimited(RSQ,separated_nonempty_list(COMMA,typ),LSQ)) 
+                                                                                                                                                                    . RSQ separated_nonempty_list(COMMA,typ) LSQ 
+
+** Conflict (shift/reduce) in state 7.
+** Token involved: RSQ
+** This state is reached from file after reading:
+
+CLASS IDENT LSQ IDENT TYPE_LT IDENT 
+
+** The derivations that appear below have the following common factor:
+** (The question mark symbol (?) represents the spot where the derivations begin to differ.)
+
+file 
+list(clas) class_Main EOF 
+clas list(clas) 
+CLASS IDENT loption(delimited(LSQ,separated_nonempty_list(COMMA,param_type_class),RSQ)) loption(delimited(LP,separated_list(COMMA,param),RP)) LBRA loption(separated_nonempty_list(SEMICOLON,decl)) RBRA 
+            (?)
+
+** In state 7, looking ahead at RSQ, reducing production
+** loption(delimited(RSQ,separated_nonempty_list(COMMA,typ),LSQ)) -> 
+** is permitted because of the following sub-derivation:
+
+LSQ separated_nonempty_list(COMMA,param_type_class) RSQ // lookahead token appears
+    param_type_class // lookahead token is inherited
+    param_type // lookahead token is inherited
+    IDENT TYPE_LT typ // lookahead token is inherited
+                  IDENT args_type // lookahead token is inherited
+                        loption(delimited(RSQ,separated_nonempty_list(COMMA,typ),LSQ)) // lookahead token is inherited
+                        . 
+
+** In state 7, looking ahead at RSQ, shifting is permitted
+** because of the following sub-derivation:
+
+LSQ separated_nonempty_list(COMMA,param_type_class) RSQ 
+    param_type_class 
+    param_type 
+    IDENT TYPE_LT typ 
+                  IDENT args_type 
+                        loption(delimited(RSQ,separated_nonempty_list(COMMA,typ),LSQ)) 
+                        . RSQ separated_nonempty_list(COMMA,typ) LSQ 

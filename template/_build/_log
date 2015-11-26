@@ -1,0 +1,28 @@
+### Starting build.
+# Target: parser.mly.depends, tags: { extension:mly, file:parser.mly, menhir_ocamldep, ocaml, ocamldep, quiet }
+/usr/bin/menhir --raw-depend --ocamldep '/usr/bin/ocamldep.opt -modules' parser.mly > parser.mly.depends # cached
+# Target: ast.mli.depends, tags: { extension:mli, file:ast.mli, ocaml, ocamldep, quiet }
+/usr/bin/ocamldep.opt -modules ast.mli > ast.mli.depends # cached
+# Target: ast.cmi, tags: { byte, compile, extension:mli, file:ast.mli, interf, ocaml, quiet }
+/usr/bin/ocamlc.opt -c -o ast.cmi ast.mli # cached
+# Target: parser.mly, tags: { extension:mly, file:parser.mly, menhir, ocaml, parser, quiet }
+/usr/bin/menhir --ocamlc /usr/bin/ocamlc.opt --infer parser.mly
++ /usr/bin/menhir --ocamlc /usr/bin/ocamlc.opt --infer parser.mly
+File "parser.mly", line 20, characters 0-9:
+Warning: the precedence level assigned to IF is never useful.
+File "parser.mly", line 21, characters 0-9:
+Warning: the precedence level assigned to RETURN is never useful.
+File "parser.mly", line 21, characters 0-9:
+Warning: the precedence level assigned to WHILE is never useful.
+Warning: 8 states have shift/reduce conflicts.
+Warning: one state has reduce/reduce conflicts.
+File "parser.mly", line 119, characters 2-22:
+File "/usr/share/menhir/standard.mly", line 57, characters 4-4:
+will not resolve reduce/reduce conflict between
+productions that originate in distinct source files:
+expr -> left_value 
+loption(delimited(RSQ,separated_nonempty_list(COMMA,typ),LSQ)) -> 
+Warning: 55 shift/reduce conflicts were arbitrarily resolved.
+Warning: one reduce/reduce conflict was arbitrarily resolved.
+Command exited with code 1.
+# Compilation unsuccessful.
