@@ -12,7 +12,7 @@
                   "else", ELSE; "eq", CMP_EG Beqphy; "extends", EXTENDS;
                   "false", CST (Cbool false); "if", IF; "ne", CMP_EG Bneqphy; "new", NEW;
                   "null", CST Cnull; "object", OBJECT;
-                  "override", OVERRIDE; "print", PRINT;
+                  "override", OVERRIDE (); "print", PRINT;
                   "return", RETURN; "this", CST Cthis; "true", CST (Cbool true);
                   "val", VAL; "var", VAR; "while", WHILE ]
   let id_or_kwd s = try List.assoc s kwd_tbl with _ -> IDENT s

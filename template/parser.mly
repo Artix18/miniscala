@@ -10,7 +10,8 @@
 %token <Ast.binop> CMP_EG
 %token <Ast.binop> CMP_INEG
 %token <string> IDENT
-%token CLASS DEF ELSE EXTENDS IF NEW OBJECT OVERRIDE PRINT RETURN VAL VAR WHILE
+%token <unit> OVERRIDE
+%token CLASS DEF ELSE EXTENDS IF NEW OBJECT PRINT RETURN VAL VAR WHILE
 %token EOF
 %token LP RP LSQ RSQ LBRA RBRA COMMA DOT COLON SEMICOLON EQUAL TYPE_LT TYPE_BT
 %token PLUS MINUS TIMES DIV MOD BANG LOG_AND LOG_OR
@@ -85,9 +86,10 @@ var:
 methode:
 | doOv = OVERRIDE? DEF name = IDENT;
         ptl = opt_ne_pl(LSQ, param_type, COMMA, RSQ) ;
-        LP  pl = separated_list(COMMA,     param)       RP  ;
-        LSQ il = separated_list(SEMICOLON, instruction) RSQ ;
-    { Mproc ((doOv <> None), name, ptl, pl, il) }
+        LP   pl = separated_list(COMMA,     param)       RP  ;
+   		LBRA il = separated_list(SEMICOLON, instruction) RBRA ;
+    (*{ Mproc ((doOv <> None), name, ptl, pl, il) }*)
+    { Mfunc ((doOv <> None), name, ptl, pl, ("Unit", ArgsType []), Ebloc il) }
 | doOv = OVERRIDE? DEF name = IDENT;
         ptl = opt_ne_pl(LSQ, param_type, COMMA, RSQ) ;
         LP  pl = separated_list(COMMA,     param)       RP  ;
@@ -95,7 +97,7 @@ methode:
     { Mfunc ((doOv <> None), name, ptl, pl, ty, ex) }
 
 param:
-| r = separated_pair(IDENT, COMMA, typ) {r}
+| r = separated_pair(IDENT, COLON, typ) {r}
 
 param_type:
 | id = IDENT                  { PTsimple   id      }
@@ -118,7 +120,7 @@ class_Main:
     LBRA
         dl = separated_list(SEMICOLON, decl) ;
     RBRA
-    { if nomMain == "Main" then dl else raise (Syntax_error "Your Main object should be named 'Main'. I see you, Jerry, I know what you're trying to do here. You and I know very well what's going to happen next, and we don't want it to happen.") }
+    { if nomMain = "Main" then dl else raise (Syntax_error "Your Main object should be named 'Main'. I see you, Jerry, I know what you're trying to do here. You and I know very well what's going to happen next, and we don't want it to happen.") }
 
 expr:
 | c = CST

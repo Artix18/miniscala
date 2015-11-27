@@ -5,7 +5,7 @@ open Format
 open Lexing
 open Parser
 
-let usage = "usage: mini-python [options] file.scala"
+let usage = "usage: mini-scala [options] file.scala"
 
 let parse_only = ref false
 
@@ -17,8 +17,8 @@ let spec =
 let file =
   let file = ref None in
   let set_file s =
-    if not (Filename.check_suffix s ".py") then
-      raise (Arg.Bad "no .py extension");
+    if not (Filename.check_suffix s ".scala") then
+      raise (Arg.Bad "no .scala extension");
     file := Some s
   in
   Arg.parse spec set_file usage;
@@ -37,18 +37,18 @@ let () =
     let f = Parser.file Lexer.next_token lb in
     close_in c;
     if !parse_only then exit 0;
-    Interp.file f
+    (*Interp.file f*)
   with
     | Lexer.Lexing_error s ->
 	report (lexeme_start_p lb, lexeme_end_p lb);
 	eprintf "lexical error: %s@." s;
 	exit 1
+	| Syntax_error s -> 
+	eprintf "custom syntax error: %s@." s;
+	exit 1
     | Parser.Error ->
 	report (lexeme_start_p lb, lexeme_end_p lb);
 	eprintf "syntax error@.";
-	exit 1
-    | Interp.Error s ->
-	eprintf "error: %s@." s;
 	exit 1
     | e ->
 	eprintf "Anomaly: %s\n@." (Printexc.to_string e);

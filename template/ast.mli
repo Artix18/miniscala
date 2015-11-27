@@ -77,6 +77,3 @@ type class_Main = decl list
 type file = clas list * class_Main
 
 
-
-
- 
