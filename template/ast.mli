@@ -42,9 +42,7 @@ and instruction =
   | Idef of var
   | Iexpr of expr
   
-and var =
-  | Vmut of ident * (typ option) * expr
-  | Vcst of ident * (typ option) * expr
+and var = bool (* is const *) * ident * (typ option) * expr
   
 and left_value =
   | Lident of ident
@@ -60,9 +58,7 @@ type param_type =
 type modifPTC = ModifNone | ModifPlus | ModifMinus
 type param_type_class = modifPTC * param_type
   
-type methode =
-  | Mproc of bool (* do_override *) * ident * param_type list * param list * instruction list
-  | Mfunc of bool (* do_override *) * ident * param_type list * param list * typ * expr
+type methode = bool (* do_override *) * ident * param_type list * param list * typ * expr
 
 type decl =
   | Dvar of var

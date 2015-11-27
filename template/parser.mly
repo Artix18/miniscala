@@ -11,7 +11,8 @@
 %token <Ast.binop> CMP_INEG
 %token <string> IDENT
 %token <unit> OVERRIDE
-%token CLASS DEF ELSE EXTENDS IF NEW OBJECT PRINT RETURN VAL VAR WHILE
+%token <bool> VAR (* is const *)
+%token CLASS DEF ELSE EXTENDS IF NEW OBJECT PRINT RETURN WHILE
 %token EOF
 %token LP RP LSQ RSQ LBRA RBRA COMMA DOT COLON SEMICOLON EQUAL TYPE_LT TYPE_BT
 %token PLUS MINUS TIMES DIV MOD BANG LOG_AND LOG_OR
@@ -71,7 +72,7 @@ clas:
         EXTENDS ; ty = typ ;
         pt   = opt_pl   (LP,  expr,             COMMA, RP ) ;
     LBRA
-        dl = separated_list(COMMA, decl) ;
+        dl = separated_list(SEMICOLON, decl) ;
     RBRA
     { CLsub  (name, ptcl, pl, (ty,pt), dl) }
 
@@ -80,21 +81,20 @@ decl:
 | m = methode { Dmeth m }
 
 var:
-| VAR id = IDENT ; ty = typ? ;EQUAL; e = expr { Vmut (id, ty, e) }
-| VAL id = IDENT ; ty = typ? ;EQUAL; e = expr { Vcst (id, ty, e) }
+| isCst = VAR; id = IDENT ; EQUAL; e = expr { (isCst, id, None, e) }
+| isCst = VAR; id = IDENT ; COLON ; ty = typ ; EQUAL; e = expr { (isCst, id, Some ty, e) }
 
 methode:
 | doOv = OVERRIDE? DEF name = IDENT;
         ptl = opt_ne_pl(LSQ, param_type, COMMA, RSQ) ;
         LP   pl = separated_list(COMMA,     param)       RP  ;
    		LBRA il = separated_list(SEMICOLON, instruction) RBRA ;
-    (*{ Mproc ((doOv <> None), name, ptl, pl, il) }*)
-    { Mfunc ((doOv <> None), name, ptl, pl, ("Unit", ArgsType []), Ebloc il) }
+    { ((doOv <> None), name, ptl, pl, ("Unit", ArgsType []), Ebloc il) }
 | doOv = OVERRIDE? DEF name = IDENT;
         ptl = opt_ne_pl(LSQ, param_type, COMMA, RSQ) ;
         LP  pl = separated_list(COMMA,     param)       RP  ;
         COLON ty = typ EQUAL ex = expr
-    { Mfunc ((doOv <> None), name, ptl, pl, ty, ex) }
+    { ((doOv <> None), name, ptl, pl, ty, ex) }
 
 param:
 | r = separated_pair(IDENT, COLON, typ) {r}
@@ -123,6 +123,8 @@ class_Main:
     { if nomMain = "Main" then dl else raise (Syntax_error "Your Main object should be named 'Main'. I see you, Jerry, I know what you're trying to do here. You and I know very well what's going to happen next, and we don't want it to happen.") }
 
 expr:
+| LP RP
+	{ Ecst Cunit }
 | c = CST
     { Ecst c }
 | LP ex = expr RP
@@ -140,7 +142,7 @@ expr:
 | e1 = expr ; bo = binop ; e2 = expr
     { Ebinop (bo, e1, e2) }
 | IF    LP cond = expr RP pos = expr %prec p_if
-    { Eif    (cond, pos, Ebloc []) }
+    { Eif    (cond, pos, Ecst Cunit) }
 | IF    LP cond = expr RP pos = expr ELSE neg = expr %prec p_if
     { Eif    (cond, pos, neg) }
 | WHILE LP cond = expr RP loop = expr %prec p_while
@@ -174,7 +176,7 @@ left_value:
 | LOG_OR    { Bor  }
 
 %inline unop:
-| PLUS      { Uneg }
+| MINUS     { Uneg }
 | BANG      { Unot }
 
 

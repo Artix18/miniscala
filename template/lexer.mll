@@ -14,7 +14,7 @@
                   "null", CST Cnull; "object", OBJECT;
                   "override", OVERRIDE (); "print", PRINT;
                   "return", RETURN; "this", CST Cthis; "true", CST (Cbool true);
-                  "val", VAL; "var", VAR; "while", WHILE ]
+                  "val", VAR(true); "var", VAR(false); "while", WHILE ]
   let id_or_kwd s = try List.assoc s kwd_tbl with _ -> IDENT s
 
   let newline lexbuf =
@@ -67,7 +67,10 @@ rule next_token = parse
   | "<:"    { TYPE_LT }
   | ">:"    { TYPE_BT }
   | integer as s
-            { try CST (Cint (int_of_string s))
+            { try let a = int_of_string s in
+            	if a >= (1 lsl 31) then raise (Failure ("Et il n'existe pas de constante négative dans la syntaxe."))
+            	else
+            	CST (Cint (a))
               with _ -> raise (Lexing_error ("constant too large: " ^ s)) }
   | '"'     { CST (Cstring (string lexbuf)) }
   | eof     { EOF }
@@ -90,6 +93,10 @@ and string = parse
   | "\\\""
       { Buffer.add_char string_buffer '"';
 	    string lexbuf }
+  | '\\'
+  	  { raise (Lexing_error "invalid escape character") }
+  | '\n'
+  	  { raise (Lexing_error "unterminated string before end of line") }
   | strChar as c
       { Buffer.add_char string_buffer c;
 	    string lexbuf }
@@ -99,6 +106,7 @@ and string = parse
 and bigComment = parse
   | "*/" { next_token lexbuf }
   | '\n' { newline lexbuf; bigComment lexbuf }
+  | eof  { raise (Lexing_error "unterminated comment") }
   | _    { bigComment lexbuf }
 
 {
