@@ -38,6 +38,7 @@ let () =
     close_in c;
     if !parse_only then exit 0;
     (*Interp.file f*)
+    exit 0
   with
     | Lexer.Lexing_error s ->
 	report (lexeme_start_p lb, lexeme_end_p lb);
