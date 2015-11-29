@@ -17,7 +17,7 @@
 %token LP RP LSQ RSQ LBRA RBRA COMMA DOT COLON SEMICOLON EQUAL TYPE_LT TYPE_BT
 %token PLUS MINUS TIMES DIV MOD BANG LOG_AND LOG_OR
 
-(* Définitions des priorités et associativités des tokens *)
+(* DŽfinitions des priorités et associativités des tokens *)
 
 
 %left LP
@@ -65,7 +65,7 @@ clas:
     LBRA
         dl = separated_list(SEMICOLON, decl) ;
     RBRA
-    { CLroot (name, ptcl, pl, dl) }
+    { Class (name, ptcl, pl, (("AnyRef", ArgsType []),[]), dl) }
 | CLASS; name = IDENT ;
         ptcl = opt_ne_pl(LSQ, param_type_class, COMMA, RSQ) ;
         pl   = opt_pl   (LP,  param,            COMMA, RP ) ;
@@ -74,7 +74,7 @@ clas:
     LBRA
         dl = separated_list(SEMICOLON, decl) ;
     RBRA
-    { CLsub  (name, ptcl, pl, (ty,pt), dl) }
+    { Class (name, ptcl, pl, (ty,pt), dl) }
 
 decl:
 | v = var     { Dvar  v }

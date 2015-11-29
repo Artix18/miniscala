@@ -12,7 +12,7 @@ type binop =
   | Beq | Bneq | Blt | Ble | Bgt | Bge (* comparaison structurelle *)
   | Beqphy | Bneqphy (* comparaison physique *) (** TODO : savoir lequel est lequel **)
   | Band | Bor (* paresseux ? *)
-  
+
 type constant =
   | Cunit
   | Cint of int
@@ -20,7 +20,7 @@ type constant =
   | Cnull
   | Cthis
   | Cstring of string
-  
+
 type args_type = ArgsType of typ list
 and typ = nom_type * args_type
   
@@ -64,9 +64,7 @@ type decl =
   | Dvar of var
   | Dmeth of methode
   
-type clas =
-  | CLroot of ident * param_type_class list * param list * decl list
-  | CLsub  of ident * param_type_class list * param list * (typ * (expr list)) * decl list
+type clas = Class of ident * param_type_class list * param list * (typ * (expr list)) * decl list
 
 type class_Main = decl list
 
