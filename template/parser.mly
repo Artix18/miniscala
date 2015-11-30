@@ -18,7 +18,7 @@
 %token LP RP LSQ RSQ LBRA RBRA COMMA DOT COLON SEMICOLON EQUAL TYPE_LT TYPE_BT
 %token PLUS MINUS TIMES DIV MOD BANG LOG_AND LOG_OR
 
-(* DŽfinitions des priorités et associativités des tokens *)
+(* Définitions des priorités et associativités des tokens *)
 
 %right EQUAL
 
@@ -41,6 +41,7 @@
 
 (* Type des valeurs retournées par l'analyseur syntaxique *)
 %type <Ast.file> file
+%type <Ast.locd_expr> locd_expr
 
 %%
 
@@ -61,12 +62,12 @@ clas:
     LBRA
         dl = separated_list(SEMICOLON, decl) ;
     RBRA
-    { Class (name, ptcl, pl, (("AnyRef", ArgsType []),[]), dl) }
+    { Class (name, ptcl, pl, (("AnyRef", ($startpos(name), $endpos(name)), ArgsType []),[]), dl) }
 | CLASS; name = IDENT ;
         ptcl = opt_ne_pl(LSQ, param_type_class, COMMA, RSQ) ;
         pl   = opt_pl   (LP,  param,            COMMA, RP ) ;
         EXTENDS ; ty = typ ;
-        pt   = opt_pl   (LP,  expr,             COMMA, RP ) ;
+        pt   = opt_pl   (LP,  locd_expr,             COMMA, RP ) ;
     LBRA
         dl = separated_list(SEMICOLON, decl) ;
     RBRA
@@ -77,19 +78,19 @@ decl:
 | m = methode { Dmeth m }
 
 var:
-| isCst = VAR; id = IDENT ; EQUAL; e = expr { (isCst, id, None, e) }
-| isCst = VAR; id = IDENT ; COLON ; ty = typ ; EQUAL; e = expr { (isCst, id, Some ty, e) }
+| isCst = VAR; id = IDENT ; EQUAL; e = locd_expr { (isCst, id, None, e, $startpos($3)) }
+| isCst = VAR; id = IDENT ; COLON ; ty = typ ; EQUAL; e = locd_expr { (isCst, id, Some ty, e, $startpos($5)) }
 
 methode:
 | doOv = OVERRIDE? DEF name = IDENT;
         ptl = opt_ne_pl(LSQ, param_type, COMMA, RSQ) ;
         LP   pl = separated_list(COMMA,     param)       RP  ;
    		LBRA il = separated_list(SEMICOLON, instruction) RBRA ;
-    { ((doOv <> None), name, ptl, pl, ("Unit", ArgsType []), Ebloc il) }
+    { ((doOv <> None), name, ptl, pl, ("Unit", ($startpos(name), $endpos(name)), ArgsType []), (Ebloc il, ($startpos($8), $endpos($10)) )) }
 | doOv = OVERRIDE? DEF name = IDENT;
         ptl = opt_ne_pl(LSQ, param_type, COMMA, RSQ) ;
         LP  pl = separated_list(COMMA,     param)       RP  ;
-        COLON ty = typ EQUAL ex = expr
+        COLON ty = typ EQUAL ex = locd_expr
     { ((doOv <> None), name, ptl, pl, ty, ex) }
 
 param:
@@ -106,7 +107,7 @@ param_type_class:
 |       pt = param_type { (ModifNone,  pt) }
 
 typ:
-| nom = IDENT ar = args_type { (nom, ar) }
+| nom = IDENT ar = args_type { (nom, ($startpos(nom), $endpos(nom)), ar) }
 
 args_type:
 | r = opt_ne_pl(LSQ, typ, COMMA, RSQ) {ArgsType r}
@@ -129,38 +130,42 @@ expr:
     { ex }
 | lv = left_value
     { Eaccess lv }
-| lv = left_value EQUAL ex = expr
-    { Eaffect (lv, ex) }
-| lv = left_value ; ar = args_type ; LP le = separated_list(COMMA,expr) RP
+| lv = left_value EQUAL ex = locd_expr
+    { Eaffect (lv, ex, $startpos($2)) }
+| lv = left_value ; ar = args_type ; LP le = separated_list(COMMA,locd_expr) RP
     { Ecall (lv, ar, le) }
-| NEW nt = IDENT ; ar = args_type ; LP le = separated_list(COMMA,expr) RP
+| NEW nt = IDENT ; ar = args_type ; LP le = separated_list(COMMA,locd_expr) RP
     { Enew  (nt, ar, le) }
-| uo = unop ; ex = expr %prec unary_op
+| uo = unop ; ex = locd_expr %prec unary_op
     { Eunop (uo,ex) }
-| e1 = expr ; bo = binop ; e2 = expr
-    { Ebinop (bo, e1, e2) }
-| IF    LP cond = expr RP pos = expr %prec p_if
-    { Eif    (cond, pos, Ecst Cunit) }
-| IF    LP cond = expr RP pos = expr ELSE neg = expr %prec p_if
+| e1 = locd_expr ; bo = binop ; e2 = locd_expr
+    { Ebinop (bo, e1, e2, $startpos(bo)) }
+| IF    LP cond = locd_expr RP pos = locd_expr %prec p_if
+    { Eif    (cond, pos, (Ecst Cunit, ($startpos($1), $endpos($1)))) }
+| IF    LP cond = locd_expr RP pos = locd_expr ELSE neg = locd_expr %prec p_if
     { Eif    (cond, pos, neg) }
-| WHILE LP cond = expr RP loop = expr %prec p_while
+| WHILE LP cond = locd_expr RP loop = locd_expr %prec p_while
     { Ewhile (cond, loop) }
 | RETURN %prec p_return
-    { Ereturn (Ebloc []) }
-| RETURN e = expr %prec p_return
+    { Ereturn (Ebloc [], ($startpos, $endpos)) }
+| RETURN e = locd_expr %prec p_return
     { Ereturn e }
-| PRINT LP ex = expr RP
+| PRINT LP ex = locd_expr RP
     { Eprint ex }
 | LBRA li = separated_list(SEMICOLON,instruction) RBRA
     { Ebloc li }
 
+locd_expr:
+| e = expr
+    { (e, ($startpos(e), $endpos(e))) }
+
 instruction:
 | va = var  { Idef  va }
-| ex = expr { Iexpr ex }
+| ex = locd_expr { Iexpr ex }
 
 left_value:
-| id = IDENT                { Lident id }
-| ex = expr DOT id = IDENT  { Laccess (ex, id) }
+| id = IDENT                { Lident (id, ($startpos(id), $endpos(id))) }
+| ex = locd_expr DOT id = IDENT  { Laccess (ex, id, ($startpos(id), $endpos(id))) }
 
 %inline binop:
 | PLUS      { Badd }
