@@ -11,9 +11,9 @@
   let kwd_tbl = [ "class", CLASS; "def", DEF;
                   "else", ELSE; "eq", CMP_EG Beqphy; "extends", EXTENDS;
                   "false", CST (Cbool false); "if", IF; "ne", CMP_EG Bneqphy; "new", NEW;
-                  "null", CST Cnull; "object", OBJECT;
+                  "null", EXPR (Enull); "object", OBJECT;
                   "override", OVERRIDE (); "print", PRINT;
-                  "return", RETURN; "this", CST Cthis; "true", CST (Cbool true);
+                  "return", RETURN; "this", EXPR (Ethis); "true", CST (Cbool true);
                   "val", VAR(true); "var", VAR(false); "while", WHILE ]
   let id_or_kwd s = try List.assoc s kwd_tbl with _ -> IDENT s
 

@@ -12,6 +12,7 @@
 %token <string> IDENT
 %token <unit> OVERRIDE
 %token <bool> VAR (* is const *)
+%token <Ast.expr> EXPR
 %token CLASS DEF ELSE EXTENDS IF NEW OBJECT PRINT RETURN WHILE
 %token EOF
 %token LP RP LSQ RSQ LBRA RBRA COMMA DOT COLON SEMICOLON EQUAL TYPE_LT TYPE_BT
@@ -19,15 +20,11 @@
 
 (* DŽfinitions des priorités et associativités des tokens *)
 
-
-%left LP
-
 %right EQUAL
 
 %left p_return
 %left p_while
 %left p_if
-%nonassoc IF
 %left ELSE
 
 %left LOG_OR
@@ -38,7 +35,6 @@
 %left TIMES DIV MOD
 %right unary_op
 %left DOT
-%left WHILE RETURN
 
 (* Point d'entrée de la grammaire *)
 %start file
@@ -127,6 +123,8 @@ expr:
 	{ Ecst Cunit }
 | c = CST
     { Ecst c }
+| e = EXPR
+	{ e }
 | LP ex = expr RP
     { ex }
 | lv = left_value

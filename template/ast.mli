@@ -17,8 +17,6 @@ type constant =
   | Cunit
   | Cint of int
   | Cbool of bool
-  | Cnull
-  | Cthis
   | Cstring of string
 
 type args_type = ArgsType of typ list
@@ -26,6 +24,8 @@ and typ = nom_type * args_type
   
 type expr =
   | Ecst of constant
+  | Ethis
+  | Enull
   | Eaccess of left_value
   | Eaffect of left_value * expr
   | Ecall of left_value * args_type * (expr list)
