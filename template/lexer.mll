@@ -9,8 +9,8 @@
   exception Lexing_error of string
 
   let kwd_tbl = [ "class", CLASS; "def", DEF;
-                  "else", ELSE; "eq", CMP_EG Beqphy; "extends", EXTENDS;
-                  "false", CST (Cbool false); "if", IF; "ne", CMP_EG Bneqphy; "new", NEW;
+                  "else", ELSE; "eq", CMP_EG (Beqphy); "extends", EXTENDS;
+                  "false", CST (Cbool false); "if", IF; "ne", CMP_EG (Bneqphy); "new", NEW;
                   "null", EXPR (Enull); "object", OBJECT;
                   "override", OVERRIDE (); "print", PRINT;
                   "return", RETURN; "this", EXPR (Ethis); "true", CST (Cbool true);
