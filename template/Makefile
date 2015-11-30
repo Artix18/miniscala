@@ -3,7 +3,7 @@ all:
 	menhir --infer parser.mly
 	ocamllex lexer.mll
 	rm parser.mli
-	ocamlopt -o main parser.ml lexer.ml main.ml typage.ml
+	ocamlopt -o main typage.ml parser.ml lexer.ml main.ml
 	
 	for f in tests/syntax/good/*.scala; do ./main $$f; done
 
