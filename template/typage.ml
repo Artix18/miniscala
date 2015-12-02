@@ -42,8 +42,8 @@ let lfor_all3 p l1 l2 l3 =
 	else aux l1 l2 l3
 
 let listeParamsAbstraits classe =
-	let (_,listePTC,_,_,_)=classe in
-	List.map (fun x -> let (_,pt)=x in match pt with |PTsimple(nom)|PTbigger(nom,_)|PTsmaller(nom,_) -> nom) 
+	let Class(_,listePTC,_,_,_)=classe in
+	List.map (fun x -> let (_,pt)=x in match pt with |PTsimple(nom)|PTbigger(nom,_)|PTsmaller(nom,_) -> nom) listePTC
 
 let getNameOfType typ =
 	let (n,_,_) = typ in n
@@ -66,26 +66,26 @@ let construitMapAssociative l1 l2 =
 
 let rec remplaceType typ mSigma = (* mSigma associe à un nom abstrait son type *)
 	let (name,lol,ArgsType(l)) = typ in
-	let nouveauNom = (if (Smap.mem name mSigma) then (Smap.find name mSigma) else name) in
+	let nouveauNom = (if (Smap.mem name mSigma) then getNameOfType (Smap.find name mSigma) else name) in (*il faudrait check que le nombre de params est juste *)
 	(nouveauNom, lol, ArgsType(List.map (fun x -> remplaceType x mSigma) l))
 
-let rec sousType t1 t2 classesDeclarees typeDeClasse = let (c1,_,ArgsType(l1)) = t1 and (c2,_,ArgsType(l2)) = t2 in match c1, c2 with
+let rec sousType t1 t2 classesDeclarees typeDeClasse mContraintes = let (c1,_,ArgsType(l1)) = t1 and (c2,_,ArgsType(l2)) = t2 in match c1, c2 with
 	| "Nothing", _ -> true
-	| "Null",    _ -> not (sousType t2 (Smap.find "AnyVal" typeDeClasse) classesDeclarees typeDeClasse)
+	| "Null",    _ -> not (sousType t2 (Smap.find "AnyVal" typeDeClasse) classesDeclarees typeDeClasse mContraintes)
 	| c1(* *),     c2(* *) when c1=c2 
 	  -> let classeDeC1 = (Smap.find c1 classesDeclarees) in let Class(_,listeTypeAbstraits,_,_,_) = classeDeC1 in
 	  	 let p x y z = (
 	  	 	match fst x with
-	  	 	| ModifNone  -> eqTypes y z classesDeclarees typeDeClasse (* peut être pas vraiment ça pour tester cette égalité, à voir *)
-	  	 	| ModifPlus  -> sousType y z classesDeclarees typeDeClasse
-	  	 	| ModifMinus -> sousType z y classesDeclarees typeDeClasse
+	  	 	| ModifNone  -> eqTypes y z classesDeclarees typeDeClasse mContraintes (* peut être pas vraiment ça pour tester cette égalité, à voir *)
+	  	 	| ModifPlus  -> sousType y z classesDeclarees typeDeClasse mContraintes
+	  	 	| ModifMinus -> sousType z y classesDeclarees typeDeClasse mContraintes
 	  	 ) in
          lfor_all3 p listeTypeAbstraits l1 l2
-	| c1(* *),     c2(* *) when fleche c1 c2 classesDeclarees -> let papaC1 = getClassFromType (typePere c1 classesDeclarees) classesDeclarees in let typePapa = determineTypeClasse papaC1 (construitMapAssociative (listeParamsAbstraits c1) l1) in sousType typePapa t2 (*il faut maintenant calculer le type de papaC1 avec sigma *)(*on sait que c1 != c2 ici donc c1->c2 <=> pere(c1)->c2 *)
-	| c1(* *),     c2      -> (* *) assert(false)
+    | c1(* *),     c2(* *) when fleche c1 c2 classesDeclarees -> let papaC1 = (*getClassFromType*) (typePere c1 classesDeclarees) in let typePapa = remplaceType papaC1 (construitMapAssociative (listeParamsAbstraits (Smap.find c1 classesDeclarees) ) l1) in sousType typePapa t2 classesDeclarees typeDeClasse mContraintes (*il faut maintenant calculer le type de papaC1 avec sigma *)(*on sait que c1 != c2 ici donc c1->c2 <=> pere(c1)->c2 *) (*peut bugger si on hérite de X[X], dans ce cas il faudrait pas remplacer le nom de la classe. *)
+    | c1(* *),     c2      when Smap.mem c2 mContraintes -> List.exists (fun x -> sousType t1 x classesDeclarees typeDeClasse mContraintes) (Smap.find c2 mContraintes) (*je ne sais pas si on peut parler de max ici parce que je ne comprends pas C2>:t, donc on parcourt toutes les relations, mais il est possible que l'on puisse faire mieux*)
 	| _ -> false
 (* dans le dernier cas, C1 != Nothing donc C != Nothing et C!=Null donc on peut juste suivre les pères de "extends" *)
-and eqTypes a b classesDeclarees typeDeClasse = (sousType a b classesDeclarees typeDeClasse) && (sousType b a classesDeclarees typeDeClasse)
+and eqTypes a b classesDeclarees typeDeClasse mContraintes = (sousType a b classesDeclarees typeDeClasse mContraintes) && (sousType b a classesDeclarees typeDeClasse mContraintes)
 
 (* j'ai mis nawak pour les loc_expr et inter, à toi de voir. Mais ça compile *)
 let rec type_expr env mExTy mMemClasse loc_expr = match fst loc_expr with
