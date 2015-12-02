@@ -38,6 +38,12 @@ let rec getTypeVarDeClasseInstanciee t mExTy listeTypePar =
 
 (** DEPRECATED **) *)
 
+let typeExiste typ classesDeclarees =
+	let (n,_,ArgsType(l))=typ in 
+	let Class(_,pl,_,_,_) = Smap.find n classesDeclarees in
+	if List.length pl <> List.length l then false
+	else true
+
 let lfor_all3 p l1 l2 l3 = 
 	let rec aux l1 l2 l3 = match l1,l2,l3 with
 		| [], [], [] -> true
@@ -68,7 +74,8 @@ let getSTFromName name classesDeclarees = getSimpleTypeFromClass (getClassFromNa
 let basicType name env = Smap.find name env
 
 let getClassFromType typ classesDeclarees = 
-	getClassFromName (getNameOfType typ) classesDeclarees
+	let (c:clas)=getClassFromName (getNameOfType typ) classesDeclarees in
+	c
 
 let typePere nomClasse classesDeclarees =
 	let Class(_,_,_,(typPere, _),_) = (Smap.find nomClasse classesDeclarees) in
@@ -106,7 +113,37 @@ let rec sousType t1 t2 env classesDeclarees mContraintes = let (c1,_,ArgsType(l1
 (* dans le dernier cas, C1 != Nothing donc C != Nothing et C!=Null donc on peut juste suivre les pères de "extends" *)
 and eqTypes a b env classesDeclarees mContraintes = (sousType a b env classesDeclarees mContraintes) && (sousType b a env classesDeclarees mContraintes)
 
-let bienForme typ = assert(false)
+let getListeParamsTypeFromClass classe =
+	let Class(_,ptListe,_,_,_) = classe in
+	List.map (fun x -> snd x) ptListe
+
+let getNamePT x = match x with |PTsimple(n)|PTbigger(n,_)|PTsmaller(n,_)->n
+
+let sigmaBienForme listeParamsType mSigma env classesDeclarees mContraintes =
+	let p x = 
+		let tr = Smap.find (getNamePT x) mSigma in
+		(
+		match x with
+		| PTbigger(nom_classe, typ)  -> sousType tr (remplaceType typ mSigma) env classesDeclarees mContraintes
+		| PTsmaller(nom_classe, typ) -> sousType (remplaceType typ mSigma) tr env classesDeclarees mContraintes
+		| _ -> true
+		)
+	in
+    List.for_all p listeParamsType
+
+let rec bienForme typ env (classesDeclarees:clas Smap.t) mContraintes =
+	if not (typeExiste typ classesDeclarees) then false
+	else
+	(
+		let (nom,_,ArgsType(params)) = typ in
+        if not (List.for_all (fun x -> bienForme x env classesDeclarees mContraintes) params) then false
+		else
+		(
+		    let mSigma = construitSigma nom params classesDeclarees in
+            let (classe:clas) = getClassFromType typ classesDeclarees in
+            sigmaBienForme (getListeParamsTypeFromClass classe) mSigma env classesDeclarees mContraintes
+		)
+	)
 
 (* j'ai mis nawak pour les loc_expr et inter, à toi de voir. Mais ça compile *)
 let rec type_expr env classesDeclarees membresClasse mContraintes loc_expr = match fst loc_expr with
@@ -160,12 +197,14 @@ let rec type_expr env classesDeclarees membresClasse mContraintes loc_expr = mat
 								 let t2 = type_expr env classesDeclarees membresClasse mContraintes e_corps in
 								 if eqTypes t1 (basicType "Boolean" env) env classesDeclarees mContraintes then basicType "Unit" env
 								 else failwith "while mal typé"
-    | Enew(nom_classe,args_type,(liste_locd_expr)) -> if not (bienForme (nom_classe, snd loc_expr,args_type)) then failwith "C[sigma] pas bien formé" else ((*TODO check que chacune des expr s'evalue en un type compatible avec args_type *) (nom_classe, snd loc_expr,args_type))
+    | Enew(nom_classe,args_type,(liste_locd_expr)) -> if not (bienForme (nom_classe, snd loc_expr,args_type) env classesDeclarees mContraintes) then failwith "C[sigma] pas bien formé" else ((*TODO check que chacune des expr s'evalue en un type compatible avec args_type *) (nom_classe, snd loc_expr,args_type))
 	(* | il manque un truc que je ne comprends pas ici, avec e.m[]() *)
+	| Ecall(lv,args_type,liste_expr) -> let tClasse = type_expr env classesDeclarees membresClasse mContraintes (Eaccess(lv), snd loc_expr) in assert(false)
 	| Ereturn(exp) -> let rt = basicType "return" env in let t = type_expr env classesDeclarees membresClasse mContraintes exp in
 						if sousType t rt env classesDeclarees mContraintes then basicType "Nothing" env
 						else failwith "type de retour invalide"
-	| Ebloc(liste_instruction) -> assert(false) (*match liste_instruction with
+	| Ebloc(liste_instruction) -> 
+								assert(false) (*match liste_instruction with
 								| []   -> (basicType "Unit" env)
 								| [Iexpr e]    -> (type_expr env classesDeclarees membresClasse mContraintes e)
 								| (Iexpr e)::q -> (type_expr env classesDeclarees membresClasse mContraintes (Ebloc q, (snd (snd e), snd (snd locd_expr))))
