@@ -203,13 +203,24 @@ let rec type_expr env classesDeclarees membresClasse mContraintes loc_expr = mat
 	| Ereturn(exp) -> let rt = basicType "return" env in let t = type_expr env classesDeclarees membresClasse mContraintes exp in
 						if sousType t rt env classesDeclarees mContraintes then basicType "Nothing" env
 						else failwith "type de retour invalide"
-	| Ebloc(liste_instruction) -> 
-								assert(false) (*match liste_instruction with
-								| []   -> (basicType "Unit" env)
-								| [Iexpr e]    -> (type_expr env classesDeclarees membresClasse mContraintes e)
-								| (Iexpr e)::q -> (type_expr env classesDeclarees membresClasse mContraintes (Ebloc q, (snd (snd e), snd (snd locd_expr))))
-								| (Ivar va)::q -> assert false (** TODO *)*)
-	(*  | Ecall of left_value * args_type * (locd_expr list) *)
+	| Ebloc(liste_instruction) -> (match liste_instruction with
+								    | []        -> (basicType "Unit" env)
+								    | [Iexpr e] -> (type_expr env classesDeclarees membresClasse mContraintes e)
+								    | instr::q  -> let nextPo = snd (snd loc_expr) (* TODO décoration *) in
+								        type_expr (match instr with
+								        | Iexpr e -> env
+								        | Idef (isCst,name,typOpt,init,_) ->
+								            (let typInit = type_expr env classesDeclarees membresClasse mContraintes init in
+								            match typOpt with
+								                | None          -> Smap.add name typInit env
+								                | Some typName  ->
+								                    if not(sousType typInit typName env classesDeclarees mContraintes) then
+								                        failwith "initialisation mal typée"
+							                        else
+							                            Smap.add name typName env (* TODO ajouter le fait que ce soit constant ou non *)
+					                        )
+								                  ) classesDeclarees membresClasse mContraintes (Ebloc (q), (nextPo (* TODO modifier le type Idef pour rajouter l'intervalle de définition *), snd (snd loc_expr)))
+								  )
 	| _ -> assert(false)
 
 (*class B[X,Y] { }
