@@ -160,16 +160,16 @@ let rec type_expr env classesDeclarees membresClasse mContraintes loc_expr = mat
 								 let t2 = type_expr env classesDeclarees membresClasse mContraintes e_corps in
 								 if eqTypes t1 (basicType "Boolean" env) env classesDeclarees mContraintes then basicType "Unit" env
 								 else failwith "while mal typé"
-	| Enew(nom_classe,args_type,(liste_locd_expr)) -> if not (bienForme (nom_classe, snd loc_expr,args_type)) then failwith "C[sigma] pas bien formé" else ((*TODO check que chacune des expr s'evalue en un type compatible avec args_type *) (nom_classe, snd loc_expr,ArgsType(args_type)))
+    | Enew(nom_classe,args_type,(liste_locd_expr)) -> if not (bienForme (nom_classe, snd loc_expr,args_type)) then failwith "C[sigma] pas bien formé" else ((*TODO check que chacune des expr s'evalue en un type compatible avec args_type *) (nom_classe, snd loc_expr,args_type))
 	(* | il manque un truc que je ne comprends pas ici, avec e.m[]() *)
 	| Ereturn(exp) -> let rt = basicType "return" env in let t = type_expr env classesDeclarees membresClasse mContraintes exp in
 						if sousType t rt env classesDeclarees mContraintes then basicType "Nothing" env
 						else failwith "type de retour invalide"
-	| Ebloc(liste_instruction) -> match liste_instruction with
+	| Ebloc(liste_instruction) -> assert(false) (*match liste_instruction with
 								| []   -> (basicType "Unit" env)
 								| [Iexpr e]    -> (type_expr env classesDeclarees membresClasse mContraintes e)
 								| (Iexpr e)::q -> (type_expr env classesDeclarees membresClasse mContraintes (Ebloc q, (snd (snd e), snd (snd locd_expr))))
-								| (Ivar va)::q -> assert false (** TODO *)
+								| (Ivar va)::q -> assert false (** TODO *)*)
 	(*  | Ecall of left_value * args_type * (locd_expr list) *)
 	| _ -> assert(false)
 
