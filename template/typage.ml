@@ -277,11 +277,6 @@ let rec type_expr env classesDeclarees (membresClasse : typesAbstraitsParamClass
                           ) classesDeclarees membresClasse mContraintes (Ebloc (q), (nextPo (* TODO modifier le type Idef pour rajouter l'intervalle de définition *), snd (snd loc_expr)))
         )
     | _ -> assert(false)
-(*and findIfConst env classesDeclarees membresClasse mContraintes lv = match lv with
-    | Lident  (   id, interv) -> if (Smap.mem id env) then snd (Smap.find id env) else findIfConst env classesDeclarees membresClasse mContraintes (Laccess ((Ethis, inter), id, inter))
-    | Laccess (e, id, interv) ->
-        let typeDeEx = type_expr env classesDeclarees membresClasse mContraintes ex in 
-        let (nom_classe,b,ArgsType(listeTypePar)) = typeDeEx in*)
 
 
 (*class B[X,Y] { }
