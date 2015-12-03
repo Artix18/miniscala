@@ -4,19 +4,20 @@ open Lexing
 
 module Smap = Map.Make(String)
 type env = (typ * bool) Smap.t (*string = ident *)
-type typesAbstraitsParamClasse = ((ident * typ) list) Smap.t (* ident x typ *)
+type typesAbstraitsParamClasse = ((ident * bool (* isConst *) * typ) list) Smap.t (* ident x typ *)
 type classesDeclarees = clas Smap.t
 
 (* env = (typ, bool) map[nom_variable] : le booleen est "isConst" *) 
 (* mExTypes = type map[nom_de_classe] *)
 (* typeParams = liste de types *) (* il faudrait map : nom_type_abstrait -> type_concret *)
-(* membresClasse = map[nom_classe] contient une liste de ident*type, ie "x" et type de classe.x *)
+(* membresClasse = (ident*bool*typ) map[nom_classe] contient une liste de ident*bool*type, ie "x", estConstant et type de classe.x *)
 (* classesDeclarees associe à un nom de classe la classe *)
 (* typeDeClasse qui représente un type abstrait, sauf dans les cas pré-définis. (==mExTypes) *)
 (* en fait typeDeClasse ne peut exister et est inutile sauf pour les cas de base... *)
 
-let getTypeAbstrait nom_classe nom_var membresClasse = (* doit renvoyer type abstrait de classe.nom *)
-    snd (List.find (fun (x,y) -> x=nom_var) (Smap.find nom_classe membresClasse))
+let getTypeAbstrait nom_classe nom_var membresClasse = (* doit renvoyer (type abstrait de classe.nom, isConst) *)
+    let (id, iC, t) = (List.find (fun (id, iC, t) -> id=nom_var) (Smap.find nom_classe membresClasse))
+    in (t, iC)
 
 (*
 (* ça a l'air bon, oui. *)
@@ -149,7 +150,7 @@ let rec bienForme env classesDeclarees mContraintes typ =
     )
 
 (* j'ai mis nawak pour les loc_expr et inter, à toi de voir. Mais ça compile *)
-let rec type_expr env classesDeclarees membresClasse mContraintes loc_expr =
+let rec type_expr env classesDeclarees (membresClasse : typesAbstraitsParamClasse) mContraintes loc_expr =
     let estSousType = sousType env classesDeclarees mContraintes in
     let estEqTypes  = eqTypes  env classesDeclarees mContraintes in
     let appRec = type_expr env classesDeclarees membresClasse mContraintes in    
@@ -162,23 +163,38 @@ let rec type_expr env classesDeclarees membresClasse mContraintes loc_expr =
                             ) env
     | Ethis -> fst (Smap.find "this" env)
     | Enull -> basicType "Null" env
-    | Eaccess(lv) ->
-        (match lv with
-            | Lident(id, inter) ->
-                if Smap.mem id env
-                then fst (Smap.find id env)
-                else appRec (Eaccess(Laccess((Ethis,inter), id, inter)), inter)
-            | Laccess(ex, x, inter) ->
-                let typeDeEx = appRec ex in 
-                let (nom_classe,b,ArgsType(listeTypePar)) = typeDeEx in
-                let typeAbsX = getTypeAbstrait nom_classe x membresClasse in (*nom_classe.x*)
-                remplaceType typeAbsX (construitSigma nom_classe listeTypePar classesDeclarees)
+    | Eaccess(lv) -> (match lv with
+        | Lident(id, inter) ->
+            if Smap.mem id env
+            then fst (Smap.find id env)
+            else appRec (Eaccess(Laccess((Ethis,inter), id, inter)), inter)
+        | Laccess(ex, x, inter) ->
+            let typeDeEx = appRec ex in 
+            let (nom_classe,b,ArgsType(listeTypePar)) = typeDeEx in
+            let typeAbsX = fst (getTypeAbstrait nom_classe x membresClasse) in (*nom_classe.x*)
+            remplaceType typeAbsX (construitSigma nom_classe listeTypePar classesDeclarees)
         )
-    | Eaffect(lv,e,pos) -> ( (* TODO : if (findIfConst lv) then failwith "non" else *)
-                             let t1 = appRec (Eaccess(lv), (fst (snd loc_expr), pos)) in
-                             let t2 = appRec e in
-                             if estSousType t1 t2 then basicType "Unit" env else failwith "Affectation invalide."
-                           )
+    | Eaffect(lv,e,pos) -> let t1 = (match lv with
+        | Lident (id, inter)      ->
+            if Smap.mem id env
+            then
+            (
+                let (ty,isConst) = Smap.find id env in
+                if isConst then failwith "Affectation d'une variable constante"
+                else ty
+            )
+            else appRec (Eaccess(Laccess((Ethis,inter), id, inter)), inter)
+        | Laccess(ex, x, inter) ->
+            let typeDeEx = appRec ex in 
+            let (nom_classe,b,ArgsType(listeTypePar)) = typeDeEx in
+            let (typeAbsX, isConst) = getTypeAbstrait nom_classe x membresClasse in
+            if isConst then failwith "Affectation d'une variable constante" else
+            remplaceType typeAbsX (construitSigma nom_classe listeTypePar classesDeclarees)
+        ) in 
+        (* let t1 = appRec (Eaccess(lv), (fst (snd loc_expr), pos)) in *)
+        let t2 = appRec e in
+        if estSousType t2 t1 then basicType "Unit" env else failwith "Affectation invalide."
+        
     | Eunop(unop, expr) ->
         let t = appRec expr in
         (match unop with
@@ -261,6 +277,12 @@ let rec type_expr env classesDeclarees membresClasse mContraintes loc_expr =
                           ) classesDeclarees membresClasse mContraintes (Ebloc (q), (nextPo (* TODO modifier le type Idef pour rajouter l'intervalle de définition *), snd (snd loc_expr)))
         )
     | _ -> assert(false)
+(*and findIfConst env classesDeclarees membresClasse mContraintes lv = match lv with
+    | Lident  (   id, interv) -> if (Smap.mem id env) then snd (Smap.find id env) else findIfConst env classesDeclarees membresClasse mContraintes (Laccess ((Ethis, inter), id, inter))
+    | Laccess (e, id, interv) ->
+        let typeDeEx = type_expr env classesDeclarees membresClasse mContraintes ex in 
+        let (nom_classe,b,ArgsType(listeTypePar)) = typeDeEx in*)
+
 
 (*class B[X,Y] { }
 class A[X] extends B[X, int] { }
