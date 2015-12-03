@@ -7,7 +7,7 @@ type env = (typ * bool) Smap.t (*string = ident *)
 type typesAbstraitsParamClasse = ((ident * typ) list) Smap.t (* ident x typ *)
 type classesDeclarees = clas Smap.t
 
-(* env = (typ, bool) map[nom_variable] *) 
+(* env = (typ, bool) map[nom_variable] bool = true si est constant *) 
 (* mExTypes = type map[nom_de_classe] *)
 (* typeParams = liste de types *) (* il faudrait map : nom_type_abstrait -> type_concret *)
 (* membresClasse = map[nom_classe] contient une liste de ident*type, ie "x" et type de classe.x *)
