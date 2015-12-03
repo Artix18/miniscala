@@ -7,7 +7,7 @@ type env = (typ * bool) Smap.t (*string = ident *)
 type typesAbstraitsParamClasse = ((ident * typ) list) Smap.t (* ident x typ *)
 type classesDeclarees = clas Smap.t
 
-(* env = (typ, bool) map[nom_variable] bool = true si est constant *) 
+(* env = (typ, bool) map[nom_variable] : le booleen est "isConst" *) 
 (* mExTypes = type map[nom_de_classe] *)
 (* typeParams = liste de types *) (* il faudrait map : nom_type_abstrait -> type_concret *)
 (* membresClasse = map[nom_classe] contient une liste de ident*type, ie "x" et type de classe.x *)
@@ -121,7 +121,7 @@ let getListeParamsTypeFromClass classe =
 
 let getNamePT x = match x with |PTsimple(n)|PTbigger(n,_)|PTsmaller(n,_)->n
 
-let sigmaBienForme listeParamsType mSigma env classesDeclarees mContraintes =
+let sigmaBienForme env classesDeclarees mContraintes listeParamsType mSigma =
     let estSousType = sousType env classesDeclarees mContraintes in
     let p x = 
         let tr = Smap.find (getNamePT x) mSigma in
@@ -134,23 +134,24 @@ let sigmaBienForme listeParamsType mSigma env classesDeclarees mContraintes =
     in
     List.for_all p listeParamsType
 
-let rec bienForme (typ: typ) env (classesDeclarees:clas Smap.t) mContraintes =
+let rec bienForme env classesDeclarees mContraintes typ =
     if not (typeExiste typ classesDeclarees) then false
     else
     (
         let (nom,_,ArgsType(params)) = typ in
-        if not (List.for_all (fun x -> bienForme x env classesDeclarees mContraintes) params) then false
+        if not (List.for_all (fun x -> bienForme env classesDeclarees mContraintes x) params) then false
         else
         (
             let mSigma = construitSigma nom params classesDeclarees in
             let (classe:clas) = getClassFromType typ classesDeclarees in
-            sigmaBienForme (getListeParamsTypeFromClass classe) mSigma env classesDeclarees mContraintes
+            sigmaBienForme env classesDeclarees mContraintes (getListeParamsTypeFromClass classe) mSigma
         )
     )
 
 (* j'ai mis nawak pour les loc_expr et inter, à toi de voir. Mais ça compile *)
 let rec type_expr env classesDeclarees membresClasse mContraintes loc_expr =
     let estSousType = sousType env classesDeclarees mContraintes in
+    let estEqTypes  = eqTypes  env classesDeclarees mContraintes in
     let appRec = type_expr env classesDeclarees membresClasse mContraintes in    
     match fst loc_expr with
     | Ecst(cst) -> basicType (match cst with
@@ -181,8 +182,8 @@ let rec type_expr env classesDeclarees membresClasse mContraintes loc_expr =
     | Eunop(unop, expr) ->
         let t = appRec expr in
         (match unop with
-            | Uneg when eqTypes env classesDeclarees mContraintes t (basicType "Int" env)     -> t
-            | Unot when eqTypes env classesDeclarees mContraintes t (basicType "Boolean" env) -> t
+            | Uneg when estEqTypes t (basicType "Int" env)     -> t
+            | Unot when estEqTypes t (basicType "Boolean" env) -> t
             | _ -> failwith "Opérateur unaire utilisé sur le mauvais type."
         )
     | Ebinop(binop, e1, e2, pos) ->
@@ -192,29 +193,35 @@ let rec type_expr env classesDeclarees membresClasse mContraintes loc_expr =
         (match binop with
         | Beqphy|Bneqphy when estSousType t1 (basicType "AnyRef" env)
                            && estSousType t2 (basicType "AnyRef" env) -> tb
-        | Beq|Bneq|Blt|Ble|Bgt|Bge when eqTypes env classesDeclarees mContraintes t1 (basicType "Int" env)
-                                     && eqTypes env classesDeclarees mContraintes t1 t2 -> tb
-        | Badd|Bsub|Bmul|Bdiv|Bmod when eqTypes env classesDeclarees mContraintes t1 (basicType "Int" env)
-                                     && eqTypes env classesDeclarees mContraintes t1 t2 -> basicType "Int" env
-        | Band|Bor when eqTypes env classesDeclarees mContraintes t1 tb && eqTypes env classesDeclarees mContraintes t2 tb -> tb
+        | Beq|Bneq|Blt|Ble|Bgt|Bge when estEqTypes t1 (basicType "Int" env)
+                                     && estEqTypes t1 t2 -> tb
+        | Badd|Bsub|Bmul|Bdiv|Bmod when estEqTypes t1 (basicType "Int" env)
+                                     && estEqTypes t1 t2 -> basicType "Int" env
+        | Band|Bor when estEqTypes t1 tb && estEqTypes t2 tb -> tb
         | _ -> failwith "opération binaire invalide."
         )
-    | Eprint(exp)           -> let t = appRec exp in
-                                if eqTypes env classesDeclarees mContraintes t (basicType "Int" env) || eqTypes env classesDeclarees mContraintes t (basicType "String" env) then (basicType "Unit" env)
-                                else failwith "Invalid type of print argument."
-    | Eif(e_cond, e_then, e_else) -> let t1 = appRec e_cond in
-                                     let t2 = appRec e_then in
-                                     let t3 = appRec e_else in
-                                     if eqTypes env classesDeclarees mContraintes t1 (basicType "Boolean" env) && (estSousType t2 t3  || estSousType t3 t2) then
-                                     ( if estSousType t2 t3 then t3 else t2 )
-                                     else
-                                         failwith "Condition mal typée"
-    | Ewhile(e_cond, e_corps) -> let t1 = appRec e_cond in
-                                 let t2 = appRec e_corps in
-                                 if eqTypes env classesDeclarees mContraintes t1 (basicType "Boolean" env) then basicType "Unit" env
-                                 else failwith "while mal typé"
+    | Eprint (exp) ->
+        let t = appRec exp in
+        if estEqTypes t (basicType "Int" env)
+        || estEqTypes t (basicType "String" env)
+        then (basicType "Unit" env)
+        else failwith "Invalid type of print argument."
+    | Eif (e_cond, e_then, e_else) ->
+        let t1 = appRec e_cond in
+        let t2 = appRec e_then in
+        let t3 = appRec e_else in
+        if estEqTypes t1 (basicType "Boolean" env)
+        && (estSousType t2 t3  || estSousType t3 t2)
+        then ( if estSousType t2 t3 then t3 else t2 )
+        else failwith "Condition mal typée"
+    | Ewhile(e_cond, e_corps) ->
+        let t1 = appRec e_cond in
+        let _ = appRec e_corps in
+        if estEqTypes t1 (basicType "Boolean" env)
+        then basicType "Unit" env
+        else failwith "while mal typé"
     | Enew(nom_classe,ArgsType(args_type),(liste_locd_expr)) ->
-        if not (bienForme ((nom_classe, snd loc_expr,ArgsType(args_type)):typ) env classesDeclarees mContraintes)
+        if not (bienForme env classesDeclarees mContraintes (nom_classe, snd loc_expr,ArgsType(args_type)))
         then failwith "C[sigma] pas bien formé"
         else (
             let mSigma = construitSigma nom_classe args_type classesDeclarees in
