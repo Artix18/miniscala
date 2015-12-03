@@ -277,6 +277,14 @@ let rec type_expr env classesDeclarees (membresClasse : typesAbstraitsParamClass
                           ) classesDeclarees membresClasse mContraintes (Ebloc (q), (nextPo (* TODO modifier le type Idef pour rajouter l'intervalle de définition *), snd (snd loc_expr)))
         )
     | _ -> assert(false)
+   
+let varName var = 
+    let (_,name,_,_,_)=var in
+    name
+
+let varConst var = 
+    let (iscst,_,_,_,_)=var in
+    iscst
 
 let className classe = 
     let Class(n,_,_,_,_) = classe in n
@@ -285,6 +293,10 @@ let classParams classe =
 
 let listeTypeFromPTs liste = 
     List.map (fun x -> (getNamePT x, assert(false), ArgsType([]))) liste
+
+let ajouteMembre membresClasse nom_classe nouveau = 
+    if Smap.mem nom_classe membresClasse then Smap.add nom_classe (nouveau::(Smap.find nom_classe membresClasse)) membresClasse
+    else Smap.add nom_classe [nouveau] membresClasse
 
 let rec type_class env classesDeclarees membresClasse mContraintes classe = 
     let listeT = getListeParamsTypeFromClass classe in
@@ -300,7 +312,7 @@ let rec type_class env classesDeclarees membresClasse mContraintes classe =
                                     (Smap.add nom (Class(nom, [], [], (typ, []) , [])) newCD, newConstraints)
        in
     let newClassesDeclarees, newMContraintes = List.fold_left checkTi (classesDeclarees, mContraintes) listeT in
-    let Class(_,_,_,(typPere, exp_list),_) = classe in
+    let Class(nom_classe,_,_,(typPere, exp_list),liste_decl) = classe in
     let (tpName, _, ArgsType(tpList)) = typPere in
     if not (bienForme env newClassesDeclarees newMContraintes typPere) then failwith "hérite d'un type pas bien formé à l'étape 2"
     else(
@@ -310,6 +322,14 @@ let rec type_class env classesDeclarees membresClasse mContraintes classe =
         (*step 4*)
         let _ = type_expr newEnv newClassesDeclarees membresClasse newMContraintes (Enew(tpName, ArgsType(tpList), exp_list),assert(false)) in
         (*step 5*)
+        let type_decl megaEnv decl = 
+            let (newEnv, newClassesDeclarees, newMembresClasse, newMContraintes) = megaEnv in
+            match decl with
+            | Dvar(var) -> let resTyp = type_expr newEnv newClassesDeclarees newMembresClasse newMContraintes (Ebloc([Idef(var)]),assert(false)) in let nnMC = ajouteMembre newMembresClasse nom_classe (varName var, varConst var, resTyp) in
+                            (newEnv, newClassesDeclarees, nnMC, newMContraintes)
+            | Dmeth(methode) -> assert(false)
+        in
+        let res = List.fold_left type_decl (newEnv, newClassesDeclarees, membresClasse, newMContraintes) liste_decl in
         assert(false)
     )
 
