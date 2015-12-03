@@ -147,7 +147,9 @@ let rec bienForme (typ: typ) env (classesDeclarees:clas Smap.t) mContraintes =
     )
 
 (* j'ai mis nawak pour les loc_expr et inter, à toi de voir. Mais ça compile *)
-let rec type_expr env classesDeclarees membresClasse mContraintes loc_expr = match fst loc_expr with
+let rec type_expr env classesDeclarees membresClasse mContraintes loc_expr =
+    let appRec = type_expr env classesDeclarees membresClasse mContraintes in    
+    match fst loc_expr with
     | Ecst(cst) -> basicType (match cst with
                                 | Cunit      -> "Unit"
                                 | Cint(a)    -> "Int"
@@ -158,24 +160,24 @@ let rec type_expr env classesDeclarees membresClasse mContraintes loc_expr = mat
     | Enull -> basicType "Null" env
     | Eaccess(lv) -> ( match lv with
                        | Lident(id, inter) -> if Smap.mem id env then fst (Smap.find id env)
-                                       else type_expr env classesDeclarees membresClasse mContraintes (Eaccess(Laccess((Ethis,inter), id, inter)), inter)
-                       | Laccess(ex, x, inter) -> let typeDeEx = type_expr env classesDeclarees membresClasse mContraintes ex in 
+                                       else     appRec (Eaccess(Laccess((Ethis,inter), id, inter)), inter)
+                       | Laccess(ex, x, inter) -> let typeDeEx = appRec ex in 
                                                let (nom_classe,b,ArgsType(listeTypePar)) = typeDeEx in
                                                let typeAbsX = getTypeAbstrait nom_classe x membresClasse in (*nom_classe.x*)
                                                remplaceType typeAbsX (construitSigma nom_classe listeTypePar classesDeclarees)
                     )
     | Eaffect(lv,e,pos) -> ( (* TODO : if (findIfConst lv) then failwith "non" else *)
-                             let t1 = type_expr env classesDeclarees membresClasse mContraintes (Eaccess(lv), (fst (snd loc_expr), pos)) in
-                             let t2 = type_expr env classesDeclarees membresClasse mContraintes e in
+                             let t1 = appRec (Eaccess(lv), (fst (snd loc_expr), pos)) in
+                             let t2 = appRec e in
                              if sousType t1 t2 env classesDeclarees mContraintes then basicType "Unit" env else failwith "Affectation invalide."
                            )
-    | Eunop(unop, expr) -> let t = type_expr env classesDeclarees membresClasse mContraintes expr in
+    | Eunop(unop, expr) -> let t = appRec expr in
                             (match unop with
                                 | Uneg when eqTypes t (basicType "Int" env) env classesDeclarees mContraintes     -> t
                                 | Unot when eqTypes t (basicType "Boolean" env) env classesDeclarees mContraintes -> t
                                 | _ -> failwith "Opérateur unaire utilisé sur le mauvais type.")
-    | Ebinop(binop, e1, e2, pos) -> let t1 = type_expr env classesDeclarees membresClasse mContraintes e1 in
-                               let t2 = type_expr env classesDeclarees membresClasse mContraintes e2 in
+    | Ebinop(binop, e1, e2, pos) -> let t1 = appRec e1 in
+                               let t2 = appRec e2 in
                                let tb = (basicType "Boolean" env) in
                                (match binop with
                                | Beqphy|Bneqphy when sousType t1 (basicType "AnyRef" env) env classesDeclarees mContraintes && sousType t2 (basicType "AnyRef" env) env classesDeclarees mContraintes -> tb
@@ -184,18 +186,18 @@ let rec type_expr env classesDeclarees membresClasse mContraintes loc_expr = mat
                                | Band|Bor when eqTypes t1 tb env classesDeclarees mContraintes && eqTypes t2 tb env classesDeclarees mContraintes -> tb
                                | _ -> failwith "opération binaire invalide."
                                )
-    | Eprint(exp)           -> let t = type_expr env classesDeclarees membresClasse mContraintes exp in
+    | Eprint(exp)           -> let t = appRec exp in
                                 if eqTypes t (basicType "Int" env) env classesDeclarees mContraintes || eqTypes t (basicType "String" env) env classesDeclarees mContraintes then (basicType "Unit" env)
                                 else failwith "Invalid type of print argument."
-    | Eif(e_cond, e_then, e_else) -> let t1 = type_expr env classesDeclarees membresClasse mContraintes e_cond in
-                                     let t2 = type_expr env classesDeclarees membresClasse mContraintes e_then in
-                                     let t3 = type_expr env classesDeclarees membresClasse mContraintes e_else in
+    | Eif(e_cond, e_then, e_else) -> let t1 = appRec e_cond in
+                                     let t2 = appRec e_then in
+                                     let t3 = appRec e_else in
                                      if eqTypes t1 (basicType "Boolean" env) env classesDeclarees mContraintes && (sousType t2 t3 env classesDeclarees mContraintes || sousType t3 t2 env classesDeclarees mContraintes) then
                                      ( if sousType t2 t3 env classesDeclarees mContraintes then t3 else t2 )
                                      else
                                          failwith "Condition mal typée"
-    | Ewhile(e_cond, e_corps) -> let t1 = type_expr env classesDeclarees membresClasse mContraintes e_cond in
-                                 let t2 = type_expr env classesDeclarees membresClasse mContraintes e_corps in
+    | Ewhile(e_cond, e_corps) -> let t1 = appRec e_cond in
+                                 let t2 = appRec e_corps in
                                  if eqTypes t1 (basicType "Boolean" env) env classesDeclarees mContraintes then basicType "Unit" env
                                  else failwith "while mal typé"
     | Enew(nom_classe,ArgsType(args_type),(liste_locd_expr)) ->
@@ -204,7 +206,7 @@ let rec type_expr env classesDeclarees membresClasse mContraintes loc_expr = mat
         else (
             let mSigma = construitSigma nom_classe args_type classesDeclarees in
             let comp x y =
-                let t1 = type_expr env classesDeclarees membresClasse mContraintes x in 
+                let t1 = appRec x in 
                 sousType t1 (remplaceType y mSigma) env classesDeclarees mContraintes
             in if (List.for_all2 comp liste_locd_expr args_type) then
                 (nom_classe, snd loc_expr,ArgsType(args_type))
@@ -212,22 +214,22 @@ let rec type_expr env classesDeclarees membresClasse mContraintes loc_expr = mat
             )
     (* | il manque un truc que je ne comprends pas ici, avec e.m[]() *)
     | Ecall(lv,ArgsType(args_type),liste_expr) ->
-        let tClasse = type_expr env classesDeclarees membresClasse mContraintes (Eaccess(lv), snd loc_expr) in assert(false)
+        let tClasse = appRec (Eaccess(lv), snd loc_expr) in assert(false)
     | Ereturn(exp) ->
         let rt = fst (Smap.find "return" env) in
-        let t = type_expr env classesDeclarees membresClasse mContraintes exp in
+        let t = appRec exp in
             if sousType t rt env classesDeclarees mContraintes
             then basicType "Nothing" env
             else failwith "type de retour invalide"
     | Ebloc(liste_instruction) ->
         (match liste_instruction with
             | []        -> (basicType "Unit" env)
-            | [Iexpr e] -> (type_expr env classesDeclarees membresClasse mContraintes e)
+            | [Iexpr e] -> (appRec e)
             | instr::q  -> let nextPo = snd (snd loc_expr) (* TODO décoration *) in
                 type_expr (match instr with
                 | Iexpr e -> env
                 | Idef (isCst,name,typOpt,init,_) ->
-                    (let typInit = type_expr env classesDeclarees membresClasse mContraintes init in
+                    (let typInit = appRec init in
                     match typOpt with
                         | None          -> Smap.add name (typInit, isCst) env
                         | Some typName  ->
