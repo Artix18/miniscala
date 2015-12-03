@@ -131,7 +131,7 @@ let sigmaBienForme listeParamsType mSigma env classesDeclarees mContraintes =
 	in
     List.for_all p listeParamsType
 
-let rec bienForme typ env (classesDeclarees:clas Smap.t) mContraintes =
+let rec bienForme (typ: typ) env (classesDeclarees:clas Smap.t) mContraintes =
 	if not (typeExiste typ classesDeclarees) then false
 	else
 	(
@@ -197,14 +197,20 @@ let rec type_expr env classesDeclarees membresClasse mContraintes loc_expr = mat
 								 let t2 = type_expr env classesDeclarees membresClasse mContraintes e_corps in
 								 if eqTypes t1 (basicType "Boolean" env) env classesDeclarees mContraintes then basicType "Unit" env
 								 else failwith "while mal typé"
-    | Enew(nom_classe,args_type,(liste_locd_expr)) -> if not (bienForme (nom_classe, snd loc_expr,args_type) env classesDeclarees mContraintes) then failwith "C[sigma] pas bien formé" else ((*TODO check que chacune des expr s'evalue en un type compatible avec args_type *) (nom_classe, snd loc_expr,args_type))
+    | Enew(nom_classe,ArgsType(args_type),(liste_locd_expr)) -> if not (bienForme ((nom_classe, snd loc_expr,ArgsType(args_type)):typ) env classesDeclarees mContraintes) then failwith "C[sigma] pas bien formé" else (
+    let mSigma = construitSigma nom_classe args_type classesDeclarees in
+    if (List.for_all2 (fun x y -> let t1 = type_expr env classesDeclarees membresClasse mContraintes x in 
+                        sousType t1 (remplaceType y mSigma) env classesDeclarees mContraintes) liste_locd_expr args_type) then
+        (nom_classe, snd loc_expr,ArgsType(args_type))
+    else failwith "new appelé avec des paramètres incompatibles"
+    )
 	(* | il manque un truc que je ne comprends pas ici, avec e.m[]() *)
-	| Ecall(lv,args_type,liste_expr) -> let tClasse = type_expr env classesDeclarees membresClasse mContraintes (Eaccess(lv), snd loc_expr) in assert(false)
+	| Ecall(lv,ArgsType(args_type),liste_expr) -> let tClasse = type_expr env classesDeclarees membresClasse mContraintes (Eaccess(lv), snd loc_expr) in assert(false)
 	| Ereturn(exp) -> let rt = basicType "return" env in let t = type_expr env classesDeclarees membresClasse mContraintes exp in
 						if sousType t rt env classesDeclarees mContraintes then basicType "Nothing" env
 						else failwith "type de retour invalide"
 	| Ebloc(liste_instruction) -> (match liste_instruction with
-								    | []        -> (basicType "Unit" env)
+                        	        | []        -> (basicType "Unit" env)
 								    | [Iexpr e] -> (type_expr env classesDeclarees membresClasse mContraintes e)
 								    | instr::q  -> let nextPo = snd (snd loc_expr) (* TODO décoration *) in
 								        type_expr (match instr with
