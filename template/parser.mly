@@ -133,7 +133,7 @@ expr:
 | lv = left_value EQUAL ex = locd_expr
     { Eaffect (lv, ex, $startpos($2)) }
 | lv = left_value ; ar = args_type ; LP le = separated_list(COMMA,locd_expr) RP
-    { Ecall (lv, ar, le) }
+    { Ecall ((match lv with Lident (id, interv) -> Laccess (Lident "this", id, interv)  | _ -> lv ), ar, le) }
 | NEW nt = IDENT ; ar = args_type ; LP le = separated_list(COMMA,locd_expr) RP
     { Enew  (nt, ar, le) }
 | uo = unop ; ex = locd_expr %prec unary_op
