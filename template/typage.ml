@@ -3,11 +3,11 @@ open Parser
 open Lexing
 
 module Smap = Map.Make(String)
-type env = typ Smap.t (*string = ident *)
+type env = (typ * bool) Smap.t (*string = ident *)
 type typesAbstraitsParamClasse = ((ident * typ) list) Smap.t (* ident x typ *)
 type classesDeclarees = clas Smap.t
 
-(* env = typ map[nom_variable] *) (* il faudrait plutot env = (isConst, nom_variable) *)
+(* env = (typ, bool) map[nom_variable] *) 
 (* mExTypes = type map[nom_de_classe] *)
 (* typeParams = liste de types *) (* il faudrait map : nom_type_abstrait -> type_concret *)
 (* membresClasse = map[nom_classe] contient une liste de ident*type, ie "x" et type de classe.x *)
@@ -71,7 +71,8 @@ let getClassFromName name classesDeclarees =
 
 let getSTFromName name classesDeclarees = getSimpleTypeFromClass (getClassFromName name classesDeclarees)*)
 
-let basicType name env = Smap.find name env
+(** TODO : Nope. C'est pas ça. **)
+let basicType name env = fst (Smap.find name env)
 
 let getClassFromType typ classesDeclarees = 
 	let (c:clas)=getClassFromName (getNameOfType typ) classesDeclarees in
@@ -153,17 +154,17 @@ let rec type_expr env classesDeclarees membresClasse mContraintes loc_expr = mat
 								| Cbool(b)   -> "Boolean"
 								| Cstring(s) -> "String"
 							) env
-	| Ethis -> basicType "this" env
+	| Ethis -> fst (Smap.find "this" env)
 	| Enull -> basicType "Null" env
 	| Eaccess(lv) -> ( match lv with
-					   | Lident(id, inter) -> if Smap.mem id env then Smap.find id env
+					   | Lident(id, inter) -> if Smap.mem id env then fst (Smap.find id env)
 					                   else type_expr env classesDeclarees membresClasse mContraintes (Eaccess(Laccess((Ethis,inter), id, inter)), inter)
 					   | Laccess(ex, x, inter) -> let typeDeEx = type_expr env classesDeclarees membresClasse mContraintes ex in 
 					   						let (nom_classe,b,ArgsType(listeTypePar)) = typeDeEx in
 					   						let typeAbsX = getTypeAbstrait nom_classe x membresClasse in (*nom_classe.x*)
 					   						remplaceType typeAbsX (construitSigma nom_classe listeTypePar classesDeclarees)
 					)
-	| Eaffect(lv,e,pos) -> ( (* let isConst = findIfConst lv in if isConst then failwith "non" else *)
+	| Eaffect(lv,e,pos) -> ( (* TODO : if (findIfConst lv) then failwith "non" else *)
 							 let t1 = type_expr env classesDeclarees membresClasse mContraintes (Eaccess(lv), (fst (snd loc_expr), pos)) in
 							 let t2 = type_expr env classesDeclarees membresClasse mContraintes e in
 							 if sousType t1 t2 env classesDeclarees mContraintes then basicType "Unit" env else failwith "Affectation invalide."
@@ -206,7 +207,7 @@ let rec type_expr env classesDeclarees membresClasse mContraintes loc_expr = mat
     )
 	(* | il manque un truc que je ne comprends pas ici, avec e.m[]() *)
 	| Ecall(lv,ArgsType(args_type),liste_expr) -> let tClasse = type_expr env classesDeclarees membresClasse mContraintes (Eaccess(lv), snd loc_expr) in assert(false)
-	| Ereturn(exp) -> let rt = basicType "return" env in let t = type_expr env classesDeclarees membresClasse mContraintes exp in
+	| Ereturn(exp) -> let rt = fst (Smap.find "return" env) in let t = type_expr env classesDeclarees membresClasse mContraintes exp in
 						if sousType t rt env classesDeclarees mContraintes then basicType "Nothing" env
 						else failwith "type de retour invalide"
 	| Ebloc(liste_instruction) -> (match liste_instruction with
@@ -218,12 +219,12 @@ let rec type_expr env classesDeclarees membresClasse mContraintes loc_expr = mat
 								        | Idef (isCst,name,typOpt,init,_) ->
 								            (let typInit = type_expr env classesDeclarees membresClasse mContraintes init in
 								            match typOpt with
-								                | None          -> Smap.add name typInit env
+								                | None          -> Smap.add name (typInit, isCst) env
 								                | Some typName  ->
 								                    if not(sousType typInit typName env classesDeclarees mContraintes) then
 								                        failwith "initialisation mal typée"
 							                        else
-							                            Smap.add name typName env (* TODO ajouter le fait que ce soit constant ou non *)
+							                            Smap.add name (typName, isCst) env
 					                        )
 								                  ) classesDeclarees membresClasse mContraintes (Ebloc (q), (nextPo (* TODO modifier le type Idef pour rajouter l'intervalle de définition *), snd (snd loc_expr)))
 								  )
