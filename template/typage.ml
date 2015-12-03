@@ -278,6 +278,40 @@ let rec type_expr env classesDeclarees (membresClasse : typesAbstraitsParamClass
         )
     | _ -> assert(false)
 
+let className classe = 
+    let Class(n,_,_,_,_) = classe in n
+let classParams classe =
+    let Class(_,_,p,_,_) = classe in p
+
+let listeTypeFromPTs liste = 
+    List.map (fun x -> (getNamePT x, assert(false), ArgsType([]))) liste
+
+let rec type_class env classesDeclarees membresClasse mContraintes classe = 
+    let listeT = getListeParamsTypeFromClass classe in
+    let checkTi (newCD, newConstraints) x =
+        match x with
+        | PTsimple(nom)        -> (Smap.add nom (Class(nom, [], [], (basicType "AnyRef" env, []), [])) newCD, newConstraints)
+        | PTbigger(nom, typ)   -> if not (bienForme env classesDeclarees mContraintes typ) then failwith "mal formé" else (
+                                    let nnCD = Smap.add nom (Class(nom, [], [], (basicType "AnyRef" env, []), [])) newCD in
+                                    let nnCT = Smap.add nom ([typ]) newConstraints in
+                                    (nnCD, nnCT)
+                                    )
+        | PTsmaller(nom, typ)  -> if not (bienForme env classesDeclarees mContraintes typ) then failwith "mal formé" else
+                                    (Smap.add nom (Class(nom, [], [], (typ, []) , [])) newCD, newConstraints)
+       in
+    let newClassesDeclarees, newMContraintes = List.fold_left checkTi (classesDeclarees, mContraintes) listeT in
+    let Class(_,_,_,(typPere, exp_list),_) = classe in
+    let (tpName, _, ArgsType(tpList)) = typPere in
+    if not (bienForme env newClassesDeclarees newMContraintes typPere) then failwith "hérite d'un type pas bien formé à l'étape 2"
+    else(
+        (* let newClassesDeclarees = (*ajouter la classe C à Gamma, ou Gamma' *) *)
+        (* step 3*)
+        let newEnv = List.fold_left (fun nEnv (nom, typ) -> if not (bienForme env newClassesDeclarees mContraintes typ) then failwith "fail etape 3" else Smap.add nom (typ, true) nEnv) (Smap.add "this" ((className classe, assert(false), ArgsType(listeTypeFromPTs listeT)), true) env) (classParams classe) in
+        (*step 4*)
+        let _ = type_expr newEnv newClassesDeclarees membresClasse newMContraintes (Enew(tpName, ArgsType(tpList), exp_list),assert(false)) in
+        (*step 5*)
+        assert(false)
+    )
 
 (*class B[X,Y] { }
 class A[X] extends B[X, int] { }
