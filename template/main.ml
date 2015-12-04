@@ -4,6 +4,7 @@
 open Format
 open Lexing
 open Parser
+open Typage
 
 let usage = "usage: mini-scala [options] file.scala"
 
@@ -37,8 +38,9 @@ let () =
     let f = Parser.file Lexer.next_token lb in
     close_in c;
     if !parse_only then exit 0;
-    (*Interp.file f*)
-    exit 0
+    typeFichier f;
+    print_string "Typage reussi.";
+    print_newline()
   with
     | Lexer.Lexing_error s ->
 	report (lexeme_start_p lb, lexeme_end_p lb);
