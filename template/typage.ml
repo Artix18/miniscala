@@ -313,11 +313,13 @@ let rec type_expr env classesDeclarees (membresClasse : typesAbstraitsParamClass
     (* | il manque un truc que je ne comprends pas ici, avec e.m[]() *)
     | Ecall(lv,ArgsType(args_type),liste_expr) ->
 
-        (try
+        (*(try
         let tClasse = appRec (Eaccess(lv), snd loc_expr) in ()
-        with | _ -> print_string (getIdentLv lv); failwith "ici");
+        with | _ -> print_string (getIdentLv lv); failwith "ici");*)
         
-        let tClasse = appRec (Eaccess(lv), snd loc_expr) in
+        let Laccess(lvexp, _,_) = lv in
+        
+        let tClasse = appRec lvexp in
 
         let nom_classe = getNameOfType tClasse in
         let tAbs, tPar, rv = checkMeth nom_classe (lv, ArgsType(args_type),liste_expr) methC in
