@@ -1,0 +1,2 @@
+class A { var x = 15454542129999999999999999999999251454542145452147483648 }
+object Main { def main(args: Array[String]) { } }

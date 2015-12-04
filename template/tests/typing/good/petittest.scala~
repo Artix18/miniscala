@@ -1,0 +1,2 @@
+class C { def m(x: String) : String = x; var y = m(2) }
+object Main { def main(args: Array[String]) { } }
