@@ -78,20 +78,20 @@ decl:
 | m = methode { Dmeth m }
 
 var:
-| isCst = VAR; id = IDENT ; EQUAL; e = locd_expr { (isCst, id, None, e, $startpos($3)) }
-| isCst = VAR; id = IDENT ; COLON ; ty = typ ; EQUAL; e = locd_expr { (isCst, id, Some ty, e, $startpos($5)) }
+| isCst = VAR; id = IDENT ; EQUAL; e = locd_expr { (isCst, id, None, e, ($startpos, $endpos)) }
+| isCst = VAR; id = IDENT ; COLON ; ty = typ ; EQUAL; e = locd_expr { (isCst, id, Some ty, e, ($startpos, $endpos)) }
 
 methode:
 | doOv = OVERRIDE? DEF name = IDENT;
         ptl = opt_ne_pl(LSQ, param_type, COMMA, RSQ) ;
         LP   pl = separated_list(COMMA,     param)       RP  ;
    		LBRA il = separated_list(SEMICOLON, instruction) RBRA ;
-    { ((doOv <> None), name, ptl, pl, ("Unit", ($startpos(name), $endpos(name)), ArgsType []), (Ebloc il, ($startpos($8), $endpos($10)) )) }
+    { ((doOv <> None), name, ptl, pl, ("Unit", ($startpos(name), $endpos(name)), ArgsType []), (Ebloc il, ($startpos($8), $endpos($10)) ), ($startpos, $endpos($7))) }
 | doOv = OVERRIDE? DEF name = IDENT;
         ptl = opt_ne_pl(LSQ, param_type, COMMA, RSQ) ;
         LP  pl = separated_list(COMMA,     param)       RP  ;
         COLON ty = typ EQUAL ex = locd_expr
-    { ((doOv <> None), name, ptl, pl, ty, ex) }
+    { ((doOv <> None), name, ptl, pl, ty, ex, ($startpos, $endpos(ty))) }
 
 param:
 | r = separated_pair(IDENT, COLON, typ) {r}

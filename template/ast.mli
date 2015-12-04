@@ -48,7 +48,7 @@ and instruction =
   | Idef of var
   | Iexpr of locd_expr
   
-and var = bool (* is const *) * ident * (typ option) * locd_expr * (pos (* du signe d'affectation *) )
+and var = bool (* is const *) * ident * (typ option) * locd_expr * (interv)
   
 and left_value =
   | Lident of ident * (interv)
@@ -64,7 +64,7 @@ type param_type =
 type modifPTC = ModifNone | ModifPlus | ModifMinus
 type param_type_class = modifPTC * param_type
   
-type methode = bool (* do_override *) * ident * param_type list * param list * typ * locd_expr
+type methode = bool (* do_override *) * ident * param_type list * param list * typ * locd_expr * (interv (* jusqu'au type *))
 
 type decl =
   | Dvar of var

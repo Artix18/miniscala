@@ -96,7 +96,7 @@ let construitMapAssociative l1 l2 =
     List.fold_left2 (fun m x y -> Smap.add x y m) Smap.empty l1 l2
 
 let rec remplaceType typ mSigma = (* mSigma associe à un nom abstrait son type *)
-    let (name,lol,ArgsType(l)) = typ in
+    let (name,pos,ArgsType(l)) = typ in
     if Smap.mem name mSigma then
     (
         if List.length l <> 0 then failwith "Un type abstrait ne peut pas prendre de parametre."
@@ -104,7 +104,7 @@ let rec remplaceType typ mSigma = (* mSigma associe à un nom abstrait son type 
             Smap.find name mSigma
     )
     else
-        (name, lol, ArgsType(List.map (fun x -> remplaceType x mSigma) l))
+        (name, pos, ArgsType(List.map (fun x -> remplaceType x mSigma) l))
     (*let nouveauNom = (if (Smap.mem name mSigma) then getNameOfType (Smap.find name mSigma) else name)
     (nouveauNom, lol, ArgsType(List.map (fun x -> remplaceType x mSigma) l))*)
 
@@ -158,6 +158,7 @@ let sigmaBienForme env classesDeclarees mContraintes listeParamsType mSigma =
     in
     List.for_all p listeParamsType
 
+(* Idéalement, générer le message d'erreur directement ici *)
 let rec bienForme env classesDeclarees mContraintes typ =
     if not (typeExiste typ classesDeclarees) then false
     else
@@ -188,12 +189,12 @@ let checkMeth nom_classe meth methC =
     let mname = lvname lv in
     if not (Smap.mem nom_classe methC) then failwith "cette methode n'existe pas (ni aucune dans cette classe, d'ailleurs)."
     else(
-    let p x = let (_,name,_,_,_,_)=x in name=mname
+    let p x = let (_,name,_,_,_,_,_)=x in name=mname
     in
     if not (List.exists p (Smap.find nom_classe methC)) then failwith "cette methode n'existe pas."
     else (
-    let methode = List.find p (Smap.find nom_classe methC) in
-    let ((_,_,ptl,pl,rv,_):methode) = methode in
+    let methode : methode = List.find p (Smap.find nom_classe methC) in
+    let ((_,_,ptl,pl,rv,_,_):methode) = methode in
     if List.length ptl <> List.length args_type then failwith "probleme taille liste t1,...,tk"
     else(
     if List.length pl <> List.length liste_expr then failwith "probleme taille liste e1,...,en"
@@ -347,10 +348,10 @@ let rec type_expr env classesDeclarees (membresClasse : typesAbstraitsParamClass
         (match liste_instruction with
             | []        -> (basicType "Unit" env)
             | [Iexpr e] -> (appRec e)
-            | instr::q  -> let nextPo = snd (snd loc_expr) (* TODO decoration *) in
+            | instr::q  -> let nextPo = ref (snd (snd loc_expr)) in
                 type_expr (match instr with
-                | Iexpr e -> env
-                | Idef (isCst,name,typOpt,init,_) ->
+                | Iexpr (e, (_,finVar))                      -> nextPo := finVar; env
+                | Idef  (isCst,name,typOpt,init,(_, finVar)) -> nextPo := finVar;
                     (let typInit = appRec init in
                     match typOpt with
                         | None          -> Smap.add name (typInit, isCst) env
@@ -360,7 +361,7 @@ let rec type_expr env classesDeclarees (membresClasse : typesAbstraitsParamClass
                             else
                                 Smap.add name (typName, isCst) env
                     )
-                          ) classesDeclarees membresClasse mContraintes methC (Ebloc (q), (nextPo (* TODO modifier le type Idef pour rajouter l'intervalle de definition *), snd (snd loc_expr)))
+                          ) classesDeclarees membresClasse mContraintes methC (Ebloc (q), (!nextPo, snd (snd loc_expr)))
         )
     | _ -> assert(false)
    
@@ -459,7 +460,7 @@ let rec type_class env classesDeclarees membresClasse mContraintes methC classe 
             | Dvar(var) -> let resTyp = type_expr newEnv newClassesDeclarees newMembresClasse newMContraintes newMethC (Ebloc([Idef(var)]),dummy_inter) in let nnMCl = ajouteMembre newMembresClasse nom_classe (varName var, varConst var, resTyp) in
                            rvMembresClasse := ajouteMembre (!rvMembresClasse) nom_classe (varName var, varConst var, resTyp);
                             (newEnv, newClassesDeclarees, nnMCl, newMContraintes, newMethC)
-            | Dmeth(methode) -> let (do_override,ident,param_type_list,param_list,typ,locd_expr) = methode in
+            | Dmeth(methode) -> let (do_override,ident,param_type_list,param_list,typ,locd_expr,interv) = methode in
                                 let nnCD,nnMCT=extendTenTprimeStep1 newEnv newClassesDeclarees newMContraintes param_type_list in
                       
                                 let nnEnv = extendStep3 newEnv nnCD nnMCT param_list in (*not found ici *)
