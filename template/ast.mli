@@ -58,8 +58,8 @@ type param = (ident * typ)
   
 type param_type =
   | PTsimple  of nom_classe
-  | PTbigger  of nom_classe * typ
-  | PTsmaller of nom_classe * typ
+  | PTbigger  of nom_classe * typ (* T >: typ *) (* var x : T *)
+  | PTsmaller of nom_classe * typ (* T <: typ *)
 
 type modifPTC = ModifNone | ModifPlus | ModifMinus
 type param_type_class = modifPTC * param_type

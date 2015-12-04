@@ -4,8 +4,9 @@ open Lexing
 
 module Smap = Map.Make(String)
 type env = (typ * bool) Smap.t (*string = ident *)
-type typesAbstraitsParamClasse = ((ident * bool (* isConst *) * typ) list) Smap.t (* ident x typ *)
+type typesAbstraitsParamClasse = ((ident * bool (* isConst *) * typ) list) Smap.t (* ident, est cst, typ *)
 type classesDeclarees = clas Smap.t
+type methodesClasses = (methode list) Smap.t
 
 (* env = (typ, bool) map[nom_variable] : le booleen est "isConst" *) 
 (* mExTypes = type map[nom_de_classe] *)
@@ -87,8 +88,16 @@ let construitMapAssociative l1 l2 =
 
 let rec remplaceType typ mSigma = (* mSigma associe à un nom abstrait son type *)
     let (name,lol,ArgsType(l)) = typ in
-    let nouveauNom = (if (Smap.mem name mSigma) then getNameOfType (Smap.find name mSigma) else name) in (*il faudrait check que le nombre de params est juste. En fait je crois que ça ne peut même pas arriver qu'il soit non nul si on remplace... *)
-    (nouveauNom, lol, ArgsType(List.map (fun x -> remplaceType x mSigma) l))
+    if Smap.mem name mSigma then
+    (
+        if List.length l <> 0 then failwith "Un type abstrait ne peut pas prendre de paramètre."
+        else
+            Smap.find name mSigma
+    )
+    else
+        (name, lol, ArgsType(List.map (fun x -> remplaceType x mSigma) l))
+    (*let nouveauNom = (if (Smap.mem name mSigma) then getNameOfType (Smap.find name mSigma) else name)
+    (nouveauNom, lol, ArgsType(List.map (fun x -> remplaceType x mSigma) l))*)
 
 let construitSigma nom_classe paramsConcrets classesDeclarees = 
     construitMapAssociative (listeParamsAbstraits (Smap.find nom_classe classesDeclarees)) paramsConcrets
@@ -298,8 +307,7 @@ let ajouteMembre membresClasse nom_classe nouveau =
     if Smap.mem nom_classe membresClasse then Smap.add nom_classe (nouveau::(Smap.find nom_classe membresClasse)) membresClasse
     else Smap.add nom_classe [nouveau] membresClasse
 
-let rec type_class env classesDeclarees membresClasse mContraintes classe = 
-    let listeT = getListeParamsTypeFromClass classe in
+let extendTenTprimeStep1 env classesDeclarees mContraintes listeT = 
     let checkTi (newCD, newConstraints) x =
         match x with
         | PTsimple(nom)        -> (Smap.add nom (Class(nom, [], [], (basicType "AnyRef" env, []), [])) newCD, newConstraints)
@@ -311,27 +319,79 @@ let rec type_class env classesDeclarees membresClasse mContraintes classe =
         | PTsmaller(nom, typ)  -> if not (bienForme env classesDeclarees mContraintes typ) then failwith "mal formé" else
                                     (Smap.add nom (Class(nom, [], [], (typ, []) , [])) newCD, newConstraints)
        in
-    let newClassesDeclarees, newMContraintes = List.fold_left checkTi (classesDeclarees, mContraintes) listeT in
+    List.fold_left checkTi (classesDeclarees, mContraintes) listeT
+
+let extendStep2 env nCD mCT listeParams =
+    List.fold_left (fun nEnv (nom, typ) -> if not (bienForme env nCD mCT typ) then failwith "fail etape 3" else Smap.add nom (typ, true) nEnv) env listeParams
+
+let ajouteMethode nom_classe methode methC = 
+    if Smap.mem nom_classe methC then Smap.add nom_classe (methode::(Smap.find nom_classe methC)) methC
+    else Smap.add nom_classe [methode] methC
+
+let ajouteMemClasse nom_pere nom_classe mMem = 
+    if Smap.mem nom_pere mMem then Smap.add nom_classe (Smap.find nom_pere mMem) mMem
+    else mMem
+
+let ajouteMethClasse nom_pere nom_classe mMeth = 
+    if Smap.mem nom_pere mMeth then Smap.add nom_classe (Smap.find nom_pere mMeth) mMeth
+    else mMeth
+
+let rec type_class env classesDeclarees membresClasse mContraintes methC classe = 
+    let rvCd = ref classesDeclarees in
+    let rvMembresClasse = ref membresClasse in
+    let rvMethC = ref methC in
+    let listeT = getListeParamsTypeFromClass classe in
+    (*let checkTi (newCD, newConstraints) x =
+        match x with
+        | PTsimple(nom)        -> (Smap.add nom (Class(nom, [], [], (basicType "AnyRef" env, []), [])) newCD, newConstraints)
+        | PTbigger(nom, typ)   -> if not (bienForme env classesDeclarees mContraintes typ) then failwith "mal formé" else (
+                                    let nnCD = Smap.add nom (Class(nom, [], [], (basicType "AnyRef" env, []), [])) newCD in
+                                    let nnCT = Smap.add nom ([typ]) newConstraints in
+                                    (nnCD, nnCT)
+                                    )
+        | PTsmaller(nom, typ)  -> if not (bienForme env classesDeclarees mContraintes typ) then failwith "mal formé" else
+                                    (Smap.add nom (Class(nom, [], [], (typ, []) , [])) newCD, newConstraints)
+       in
+    let newClassesDeclarees, newMContraintes = List.fold_left checkTi (classesDeclarees, mContraintes) listeT in*)
+    (*step1*)
+    let newClassesDeclarees, newMContraintes = extendTenTprimeStep1 env classesDeclarees mContraintes listeT in
     let Class(nom_classe,_,_,(typPere, exp_list),liste_decl) = classe in
     let (tpName, _, ArgsType(tpList)) = typPere in
     if not (bienForme env newClassesDeclarees newMContraintes typPere) then failwith "hérite d'un type pas bien formé à l'étape 2"
     else(
-        (* let newClassesDeclarees = (*ajouter la classe C à Gamma, ou Gamma' *) *)
+        (*let newClassesDeclarees = (*ajouter la classe C à Gamma *) *)
+        rvCd := Smap.add nom_classe classe (!rvCd);
+        (* il faut ajouter tous les trucs du pere de classe à Gamma *)
+        (* mais pas à Gamma' pour éviter qu'une classe s'appelle elle même. Mais du coup il faut pouvoir appeler les fonctions du pere*)
+        rvMembresClasse := ajouteMemClasse tpName nom_classe (!rvMembresClasse);
+        rvMethC := ajouteMethClasse tpName nom_classe (!rvMethC);
         (* step 3*)
-        let newEnv = List.fold_left (fun nEnv (nom, typ) -> if not (bienForme env newClassesDeclarees mContraintes typ) then failwith "fail etape 3" else Smap.add nom (typ, true) nEnv) (Smap.add "this" ((className classe, assert(false), ArgsType(listeTypeFromPTs listeT)), true) env) (classParams classe) in
+        (*let newEnv = List.fold_left (fun nEnv (nom, typ) -> if not (bienForme env newClassesDeclarees mContraintes typ) then failwith "fail etape 3" else Smap.add nom (typ, true) nEnv) (Smap.add "this" ((className classe, assert(false), ArgsType(listeTypeFromPTs listeT)), true) env) (classParams classe) in*)
+        let newEnv = extendStep2 (Smap.add "this" ((className classe, assert(false), ArgsType(listeTypeFromPTs listeT)), true) env) newClassesDeclarees mContraintes (classParams classe) in
         (*step 4*)
         let _ = type_expr newEnv newClassesDeclarees membresClasse newMContraintes (Enew(tpName, ArgsType(tpList), exp_list),assert(false)) in
         (*step 5*)
         let type_decl megaEnv decl = 
-            let (newEnv, newClassesDeclarees, newMembresClasse, newMContraintes) = megaEnv in
+            let (newEnv, newClassesDeclarees, newMembresClasse, newMContraintes, newMethC) = megaEnv in
             match decl with
-            | Dvar(var) -> let resTyp = type_expr newEnv newClassesDeclarees newMembresClasse newMContraintes (Ebloc([Idef(var)]),assert(false)) in let nnMC = ajouteMembre newMembresClasse nom_classe (varName var, varConst var, resTyp) in
-                            (newEnv, newClassesDeclarees, nnMC, newMContraintes)
-            | Dmeth(methode) -> assert(false)
+            | Dvar(var) -> let resTyp = type_expr newEnv newClassesDeclarees newMembresClasse newMContraintes (Ebloc([Idef(var)]),assert(false)) in let nnMCl = ajouteMembre newMembresClasse nom_classe (varName var, varConst var, resTyp) in
+                           rvMembresClasse := ajouteMembre (!rvMembresClasse) nom_classe (varName var, varConst var, resTyp);
+                            (newEnv, newClassesDeclarees, nnMCl, newMContraintes, newMethC)
+            | Dmeth(methode) -> let (do_override,ident,param_type_list,param_list,typ,locd_expr) = methode in
+                                let nnCD,nnMCT=extendTenTprimeStep1 newEnv newClassesDeclarees newMContraintes param_type_list in
+                                let nnEnv = extendStep2 newEnv nnCD nnMCT param_list in
+                                
+                                let nnMethC = ajouteMethode nom_classe methode newMethC in
+                                rvMethC := ajouteMethode nom_classe methode (!rvMethC);
+                                
+                                if not (sousType nnEnv nnCD nnMCT (type_expr nnEnv nnCD newMembresClasse nnMCT locd_expr) typ) then failwith "problème step5"
+                                else (** TODO : check override **)(nnEnv, nnCD, newMembresClasse, nnMCT, nnMethC)
         in
-        let res = List.fold_left type_decl (newEnv, newClassesDeclarees, membresClasse, newMContraintes) liste_decl in
-        assert(false)
+        let _ = List.fold_left type_decl (newEnv, newClassesDeclarees, membresClasse, newMContraintes, methC) liste_decl in
+        (!rvCd, !rvMembresClasse, !rvMethC)
     )
+
+(* sigma : T -> vector<bool> vector<vector<bool>, vector2<int>, B> *)
 
 (*class B[X,Y] { }
 class A[X] extends B[X, int] { }
