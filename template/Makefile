@@ -9,5 +9,5 @@ all:
 	for f in tests/exec/*.scala; do ./pscala $$f; done
 
 clean :
-	rm -rf main *.cmo *.cmi *.cmx *~ *.o
+	rm -rf pscala *.cmo *.cmi *.cmx *~ *.o
 	rm parser.ml lexer.ml
