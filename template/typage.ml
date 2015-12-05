@@ -389,12 +389,12 @@ let extendTenTprimeStep1 env classesDeclarees mContraintes listeT =
     let checkTi (newCD, newConstraints) x =
         match x with
         | PTsimple(nom)        -> (Smap.add nom (Class(nom, [], [], (basicType "AnyRef" env, []), [])) newCD, newConstraints)
-        | PTbigger(nom, typ)   -> if not (bienForme env classesDeclarees mContraintes typ) then failwith "mal forme" else (
+        | PTbigger(nom, typ)   -> if not (bienForme env newCD newConstraints typ) then failwith "mal forme" else (
                                     let nnCD = Smap.add nom (Class(nom, [], [], (basicType "AnyRef" env, []), [])) newCD in
                                     let nnCT = Smap.add nom ([typ]) newConstraints in
                                     (nnCD, nnCT)
                                     )
-        | PTsmaller(nom, typ)  -> if not (bienForme env classesDeclarees mContraintes typ) then failwith "mal forme" else
+        | PTsmaller(nom, typ)  -> if not (bienForme env newCD newConstraints typ) then failwith "mal forme" else
                                     (Smap.add nom (Class(nom, [], [], (typ, []) , [])) newCD, newConstraints)
        in
     List.fold_left checkTi (classesDeclarees, mContraintes) listeT
