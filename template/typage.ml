@@ -331,14 +331,15 @@ let rec type_expr env classesDeclarees membresClasse mContraintes methC loc_expr
         else (
             let mSigma = construitSigma nom_classe args_type classesDeclarees in
             let Class (nom_classe, typesParamTheo, paramTheo, _,_) = Smap.find nom_classe classesDeclarees in
-            let comp x y =
-                let t1 = appRec x in 
-                if not (estSousType t1 (remplaceType (snd y) mSigma))
-                then failwith "TODO"
+            let checkType e y =
+                let t1 = appRec e in
+                let t2 = (remplaceType (snd y) mSigma) in
+                if not (estSousType t1 t2)
+                then raise (Type_error ((Printf.sprintf "This expression has type %a, but was expected to be castable to %a." typeDisplay t1 typeDisplay t2), snd e))
             in if (List.length liste_locd_expr <> List.length paramTheo)
             then raise (Param_error ((Printf.sprintf "Class %s's constructor expects %d parameters, but was given %d" nom_classe (List.length paramTheo) (List.length liste_locd_expr)), dummy_inter (** TODO *) ))
             else
-                List.iter2 comp liste_locd_expr paramTheo;
+                List.iter2 checkType liste_locd_expr paramTheo;
                 (nom_classe, snd loc_expr,ArgsType(args_type))
             )
     (* | il manque un truc que je ne comprends pas ici, avec e.m[]() *)
@@ -353,9 +354,11 @@ let rec type_expr env classesDeclarees membresClasse mContraintes methC loc_expr
         let tClasse = appRec lvexp in
 
         let nom_classe = getNameOfType tClasse in
-        let tAbs, tPar, rv = checkMeth nom_classe (lv, ArgsType(args_type),liste_expr) methC in
-        if not (List.for_all (fun x -> estBF x) args_type) then failwith "params_type pas bien formes"
-        else(
+        let tAbs, tPar, rv = checkMeth nom_classe (lv, ArgsType(args_type),liste_expr) methC in (
+        let checkFormation t =
+            if not (estBF t) then failwith "Type mal formé."
+        in
+        List.iter checkFormation args_type;
         let sigma = construitSigma nom_classe (parConcret tClasse) classesDeclarees in
         let sigmaPrime = construitMapAssociative (lPAFromPT tAbs) args_type in
         let compo = compose sigma sigmaPrime in
