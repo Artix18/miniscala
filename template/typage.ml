@@ -150,8 +150,8 @@ let sigmaBienForme env classesDeclarees mContraintes listeParamsType mSigma =
         let tr = Smap.find (getNamePT x) mSigma in
         (
         match x with
-        | PTbigger(nom_classe, typ)  -> estSousType tr (remplaceType typ mSigma)
-        | PTsmaller(nom_classe, typ) -> estSousType (remplaceType typ mSigma) tr
+        | PTbigger(nom_classe, typ)  -> estSousType (remplaceType typ mSigma) tr
+        | PTsmaller(nom_classe, typ) -> estSousType tr (remplaceType typ mSigma)
         | _ -> true
         )
         )

@@ -55,7 +55,7 @@ and left_value =
   | Laccess of locd_expr * ident * (interv)
   
 type param = (ident * typ)
-  
+
 type param_type =
   | PTsimple  of nom_classe
   | PTbigger  of nom_classe * typ (* T >: typ *) (* var x : T *)
