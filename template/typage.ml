@@ -1,7 +1,7 @@
 open Ast
 open Parser
 open Lexing
-open Format
+open Printf
 
 module Smap = Map.Make(String)
 type env = (typ * bool) Smap.t (*string = ident *)
@@ -14,6 +14,17 @@ exception Unbound_error of string * interv
 exception Type_error of string * interv
 
 let dummy_inter = (Lexing.dummy_pos, Lexing.dummy_pos)
+
+let rec typeDisplay () ((nom_classe,_,ArgsType li) : typ) =
+    let rec listDisplay () li = match li with
+        | []   -> ""
+        | [p]  -> Printf.sprintf "%a"    typeDisplay p
+        | p::q -> Printf.sprintf "%a,%a" typeDisplay p listDisplay q
+    in match li with
+    | [] -> Printf.sprintf "%s" nom_classe
+    | _  -> Printf.sprintf "%s[%a]" nom_classe listDisplay li
+
+
 
 (* env = (typ, bool) map[nom_variable] : le booleen est "isConst" *) 
 (* membresClasse = (ident*bool*typ) map[nom_classe] contient une liste de ident*bool*type, ie "x", estConstant et type de classe.x *)
@@ -204,9 +215,9 @@ let checkMeth nom_classe meth methC =
     else (
     let methode : methode = List.find p (Smap.find nom_classe methC) in
     let ((_,_,ptl,pl,rv,_,_):methode) = methode in
-    if List.length ptl <> List.length args_type then raise (Param_error (Format.sprintf "Method %s.%s expects %d type parameters, but was given %d." nom_classe mname (List.length ptl) (List.length args_type), (fst(snd exp), snd inter)))
+    if List.length ptl <> List.length args_type then raise (Param_error (Printf.sprintf "Method %s.%s expects %d type parameters, but was given %d." nom_classe mname (List.length ptl) (List.length args_type), (fst(snd exp), snd inter)))
     else(
-    if List.length pl <> List.length liste_expr then raise (Param_error (Format.sprintf "Method %s.%s expects %d parameters, but was given %d." nom_classe mname (List.length pl) (List.length liste_expr), (fst(snd exp), snd inter)))
+    if List.length pl <> List.length liste_expr then raise (Param_error (Printf.sprintf "Method %s.%s expects %d parameters, but was given %d." nom_classe mname (List.length pl) (List.length liste_expr), (fst(snd exp), snd inter)))
     else (
         (ptl, pl, rv)
     )
@@ -245,11 +256,7 @@ let rec type_expr env classesDeclarees membresClasse mContraintes methC loc_expr
             let typeAbsX = fst (getTypeAbstrait nom_classe x membresClasse) in (*nom_classe.x*)
             remplaceType typeAbsX (construitSigma nom_classe listeTypePar classesDeclarees)
             )
-            else
-            (
-                eprintf "\nEn fait ça va être ligne %d, caractères %d - %d :\n" ((fst inter).pos_lnum) ((fst inter).pos_cnum - (fst inter).pos_bol + 1) ((snd inter).pos_cnum - (snd inter).pos_bol + 1);
-                failwith ("on ne devrait pas gerer les appels de methodes ou autres ici. La variable nom_classe.x n'existe pas : nom_classe = " ^ nom_classe ^ " et nom_x = " ^ x)
-            )
+            else raise (Unbound_error (Printf.sprintf "Class %s has no field named %s." nom_classe x, inter))
         )
     | Eaffect(lv,e,pos) -> let t1 = (match lv with
         | Lident (id, inter)      ->
@@ -257,7 +264,7 @@ let rec type_expr env classesDeclarees membresClasse mContraintes methC loc_expr
             then
             (
                 let (ty,isConst) = Smap.find id env in
-                if isConst then failwith "Affectation d'une variable constante"
+                if isConst then raise (Type_error (Printf.sprintf "Local value %s is constant." id, inter))
                 else ty
             )
             else appRec (Eaccess(Laccess((Ethis,inter), id, inter)), inter)
@@ -265,19 +272,21 @@ let rec type_expr env classesDeclarees membresClasse mContraintes methC loc_expr
             let typeDeEx = appRec ex in 
             let (nom_classe,b,ArgsType(listeTypePar)) = typeDeEx in
             let (typeAbsX, isConst) = getTypeAbstrait nom_classe x membresClasse in
-            if isConst then failwith "Affectation d'une variable constante" else
-            remplaceType typeAbsX (construitSigma nom_classe listeTypePar classesDeclarees)
+            if isConst then raise (Type_error (Printf.sprintf "Field %s.%s is constant." nom_classe x, inter))
+            else remplaceType typeAbsX (construitSigma nom_classe listeTypePar classesDeclarees)
         ) in 
         (* let t1 = appRec (Eaccess(lv), (fst (snd loc_expr), pos)) in *)
         let t2 = appRec e in
-        if estSousType t2 t1 then realBasicType "Unit" else failwith "Affectation invalide."
+        if estSousType t2 t1 then realBasicType "Unit"
+        else raise (Type_error ((Printf.sprintf "This expression has type %a, but was expected to be castable to %a." typeDisplay t2 typeDisplay t1), snd e))
         
     | Eunop(unop, expr) ->
         let t = appRec expr in
         (match unop with
-            | Uneg when estEqTypes t (realBasicType "Int")     -> t
-            | Unot when estEqTypes t (realBasicType "Boolean") -> t
-            | _ -> failwith "Operateur unaire utilise sur le mauvais type."
+            | Uneg -> if estEqTypes t (realBasicType "Int") then t
+                      else raise (Type_error ((Printf.sprintf "This expression has type %a, but was expected to be Int." typeDisplay t), snd expr))
+            | Unot -> if estEqTypes t (realBasicType "Boolean") then t
+                      else raise (Type_error ((Printf.sprintf "This expression has type %a, but was expected to be Boolean." typeDisplay t), snd expr))
         )
     | Ebinop(binop, e1, e2, pos) ->
         let t1 = appRec e1 in
@@ -291,7 +300,7 @@ let rec type_expr env classesDeclarees membresClasse mContraintes methC loc_expr
         | Badd|Bsub|Bmul|Bdiv|Bmod when estEqTypes t1 (realBasicType "Int")
                                      && estEqTypes t1 t2 -> realBasicType "Int"
         | Band|Bor when estEqTypes t1 tb && estEqTypes t2 tb -> tb
-        | _ -> failwith "operation binaire invalide."
+        | _ -> failwith "operation binaire invalide. Flemme."
         )
     | Eprint (exp) ->
         let t = appRec exp in
