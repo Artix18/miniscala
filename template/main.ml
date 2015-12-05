@@ -54,6 +54,7 @@ let () =
 	eprintf "syntax error@.";
 	exit 1
     | e ->
+    report (lexeme_start_p lb, lexeme_end_p lb);
 	eprintf "Anomaly: %s\n@." (Printexc.to_string e);
 	exit 2
 
