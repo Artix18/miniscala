@@ -187,7 +187,7 @@ let compose sigma sigmaPrime = (*sigma rond sigmaPrime*)
 let checkMeth nom_classe meth methC =
     let (lv, ArgsType(args_type),liste_expr) = meth in
     let mname = lvname lv in
-    if not (Smap.mem nom_classe methC) then failwith "cette methode n'existe pas (ni aucune dans cette classe, d'ailleurs)."
+    if not (Smap.mem nom_classe methC) then failwith ("cette methode n'existe pas (ni aucune dans cette classe, d'ailleurs). nom_classe = " ^ nom_classe)
     else(
     let p x = let (_,name,_,_,_,_,_)=x in name=mname
     in
@@ -458,9 +458,10 @@ let rec type_class env classesDeclarees membresClasse mContraintes methC classe 
         let type_decl megaEnv decl = 
             let (newEnv, newClassesDeclarees, newMembresClasse, newMContraintes, newMethC) = megaEnv in
             match decl with
-            | Dvar(var) -> let resTyp = type_expr newEnv newClassesDeclarees newMembresClasse newMContraintes newMethC (Ebloc([Idef(var)]),dummy_inter) in let nnMCl = ajouteMembre newMembresClasse nom_classe (varName var, varConst var, resTyp) in
+            | Dvar(var) -> let resTyp = type_expr newEnv newClassesDeclarees newMembresClasse newMContraintes newMethC (Ebloc([Idef(var); Iexpr(Eaccess(Lident(varName var,dummy_inter)), dummy_inter)]),dummy_inter) in
+                           let nnMCl = ajouteMembre newMembresClasse nom_classe (varName var, varConst var, resTyp) in
                            rvMembresClasse := ajouteMembre (!rvMembresClasse) nom_classe (varName var, varConst var, resTyp);
-                            (newEnv, newClassesDeclarees, nnMCl, newMContraintes, newMethC)
+                           (newEnv, newClassesDeclarees, nnMCl, newMContraintes, newMethC)
             | Dmeth(methode) -> let (do_override,ident,param_type_list,param_list,typ,locd_expr,interv) = methode in
                                 let nnCD,nnMCT=extendTenTprimeStep1 newEnv newClassesDeclarees newMContraintes param_type_list in
                       
