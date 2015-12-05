@@ -10,4 +10,3 @@ all:
 clean :
 	rm -rf main *.cmo *.cmi *.cmx *~ *.o
 	rm parser.ml lexer.ml
-	rm a.out ast
