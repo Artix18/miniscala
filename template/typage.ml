@@ -304,10 +304,11 @@ let rec type_expr env classesDeclarees (membresClasse : typesAbstraitsParamClass
         then failwith "C[sigma] pas bien forme"
         else (
             let mSigma = construitSigma nom_classe args_type classesDeclarees in
+            let Class (_, typesParamTheo, paramTheo, _,_) = Smap.find nom_classe classesDeclarees in
             let comp x y =
                 let t1 = appRec x in 
-                estSousType t1 (remplaceType y mSigma)
-            in if (List.for_all2 comp liste_locd_expr args_type) then
+                estSousType t1 (remplaceType (snd y) mSigma)
+            in if (List.for_all2 comp liste_locd_expr paramTheo) then
                 (nom_classe, snd loc_expr,ArgsType(args_type))
             else failwith "new appele avec des parametres incompatibles"
             )
