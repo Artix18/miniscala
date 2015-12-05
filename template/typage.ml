@@ -330,13 +330,16 @@ let rec type_expr env classesDeclarees membresClasse mContraintes methC loc_expr
         then failwith "C[sigma] pas bien forme"
         else (
             let mSigma = construitSigma nom_classe args_type classesDeclarees in
-            let Class (_, typesParamTheo, paramTheo, _,_) = Smap.find nom_classe classesDeclarees in
+            let Class (nom_classe, typesParamTheo, paramTheo, _,_) = Smap.find nom_classe classesDeclarees in
             let comp x y =
                 let t1 = appRec x in 
-                estSousType t1 (remplaceType (snd y) mSigma)
-            in if (List.for_all2 comp liste_locd_expr paramTheo) then
+                if not (estSousType t1 (remplaceType (snd y) mSigma))
+                then failwith "TODO"
+            in if (List.length liste_locd_expr <> List.length paramTheo)
+            then raise (Param_error ((Printf.sprintf "Class %s's constructor expects %d parameters, but was given %d" nom_classe (List.length paramTheo) (List.length liste_locd_expr)), dummy_inter (** TODO *) ))
+            else
+                List.iter2 comp liste_locd_expr paramTheo;
                 (nom_classe, snd loc_expr,ArgsType(args_type))
-            else failwith "new appele avec des parametres incompatibles"
             )
     (* | il manque un truc que je ne comprends pas ici, avec e.m[]() *)
     | Ecall(lv,ArgsType(args_type),liste_expr) ->
