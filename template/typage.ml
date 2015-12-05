@@ -502,7 +502,7 @@ let rec type_class classesDeclarees membresClasse mContraintes methC classe =
         let methC               = ajouteMethClasse tpName nom_classe methC ptitSigma in
         (* step 3*)
         (*let newEnv = List.fold_left (fun nEnv (nom, typ) -> if not (bienForme env newClassesDeclarees mContraintes typ) then failwith "fail etape 3" else Smap.add nom (typ, true) nEnv) (Smap.add "this" ((className classe, assert(false), ArgsType(listeTypeFromPTs listeT)), true) env) (classParams classe) in*)
-        let newEnv = extendStep3 (Smap.add "this" ((className classe, dummy_inter, ArgsType(listeTypeFromPTs listeT)), true) Smap.empty) newClassesDeclarees mContraintes (classParams classe) in
+        let newEnv = (Smap.add "this" ((className classe, dummy_inter, ArgsType(listeTypeFromPTs listeT)), true) Smap.empty) in
         
         let membresClasse = ajouteVarConstruct nom_classe (classParams classe) membresClasse in
         rvMembresClasse := ajouteVarConstruct nom_classe (classParams classe) (!rvMembresClasse);
