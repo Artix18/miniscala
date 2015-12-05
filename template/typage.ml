@@ -465,12 +465,13 @@ let rec type_class env classesDeclarees membresClasse mContraintes methC classe 
                                 let nnCD,nnMCT=extendTenTprimeStep1 newEnv newClassesDeclarees newMContraintes param_type_list in
                       
                                 let nnEnv = extendStep3 newEnv nnCD nnMCT param_list in (*not found ici *)
+                                let nnEnv = Smap.add "return" (typ,true) nnEnv in
                                 
                                 let nnMethC = ajouteMethode nom_classe methode newMethC in
                                 rvMethC := ajouteMethode nom_classe methode (!rvMethC);
                                 
                                 if not (sousType nnEnv nnCD nnMCT (type_expr nnEnv nnCD newMembresClasse nnMCT nnMethC locd_expr) typ) then failwith "probleme step5"
-                                else (** TODO : check override **)(nnEnv, nnCD, newMembresClasse, nnMCT, nnMethC)
+                                else (** TODO : check override **)(newEnv, newClassesDeclarees, newMembresClasse, newMContraintes, nnMethC)
         in
         let _ = List.fold_left type_decl (newEnv, newClassesDeclarees, membresClasse, newMContraintes, methC) liste_decl in
         (!rvCd, !rvMembresClasse, !rvMethC)
