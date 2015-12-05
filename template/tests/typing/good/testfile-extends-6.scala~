@@ -17,3 +17,5 @@ class Vecteur[X] { }
 class C2[X] { }
 class C1[X] extends C2[Vecteur[X]] { }
 *)
+
+(* LIRE *)
