@@ -5,7 +5,7 @@ all:
 	rm parser.mli
 	ocamlopt -o main parser.ml lexer.ml typage.ml main.ml
 	
-	for f in tests/typing/good/*.scala; do ./main $$f; done
+	for f in tests/exec/*.scala; do ./main $$f; done
 
 clean :
 	rm -rf main *.cmo *.cmi *.cmx *~ *.o

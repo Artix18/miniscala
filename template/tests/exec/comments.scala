@@ -11,7 +11,7 @@ object Main {
     var/* un commentaire est un séparateur valide */x = 1/* Un seul commentaire, le dernier "/" effectue une division *//2;
     if (x == 0 &&
     ("\n \" /* */ // qsdq#sds\n "
-    ne null))
+    ne ""))
     /* / * // * / exit */
      /* hello\n // */
       print("ok\n")

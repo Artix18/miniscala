@@ -70,4 +70,4 @@ object Main {
   }
 }
 
-(* LIRE *)
+/* LIRE */

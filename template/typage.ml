@@ -79,7 +79,10 @@ let getClassFromName name classesDeclarees =
 let getSTFromName name classesDeclarees = getSimpleTypeFromClass (getClassFromName name classesDeclarees)*)
 
 (** TODO : Nope. C'est pas ça. **)
-let basicType name env = fst (Smap.find name env)
+let basicType classesDeclarees name =
+    let Class(_, lPTC, lP, typePere, lD) = (Smap.find name classesDeclarees) in
+    let lT = List.map (fun idParam -> (idParam, dummy_inter, ArgsType [])) (lPAFromPTC lPTC) in
+    (name, dummy_inter, ArgsType lT)
 
 let getClassFromType typ classesDeclarees = 
     let (c:clas)=getClassFromName (getNameOfType typ) classesDeclarees in
@@ -113,9 +116,10 @@ let construitSigma nom_classe paramsConcrets classesDeclarees =
 
 let rec sousType env classesDeclarees mContraintes t1 t2 =
     let estSousType = sousType env classesDeclarees mContraintes in
+    let realBasicType = basicType classesDeclarees in
     let (c1,_,ArgsType(l1)) = t1 and (c2,_,ArgsType(l2)) = t2 in match c1, c2 with
     | "Nothing", _ -> true
-    | "Null",    _ -> not (estSousType t2 (basicType "AnyVal" env))
+    | "Null",    _ -> not (estSousType t2 (realBasicType "AnyVal"))
     | c1(* *),     c2(* *) when c1=c2 ->
         let classeDeC1 = (Smap.find c1 classesDeclarees) in
         let Class(_,listeTypeAbstraits,_,_,_) = classeDeC1 in
@@ -208,21 +212,22 @@ let checkMeth nom_classe meth methC =
 let getIdentLv lv = match lv with   | Lident(ident,_)|Laccess(_,ident,_)->ident
 
 (* j'ai mis nawak pour les loc_expr et inter, à toi de voir. Mais ça compile *)
-let rec type_expr env classesDeclarees (membresClasse : typesAbstraitsParamClasse) mContraintes methC loc_expr =
+let rec type_expr env classesDeclarees membresClasse mContraintes methC loc_expr =
     let estSousType = sousType env classesDeclarees mContraintes in
     let estEqTypes  = eqTypes  env classesDeclarees mContraintes in
     let appRec = type_expr env classesDeclarees membresClasse mContraintes methC in 
     let estSigBF = sigmaBienForme env classesDeclarees mContraintes in   
     let estBF    = bienForme env classesDeclarees mContraintes in
+    let realBasicType = basicType classesDeclarees in
     match fst loc_expr with
-    | Ecst(cst) -> basicType (match cst with
+    | Ecst(cst) -> realBasicType (match cst with
                                 | Cunit      -> "Unit"
                                 | Cint(a)    -> "Int"
                                 | Cbool(b)   -> "Boolean"
                                 | Cstring(s) -> "String"
-                            ) env
+                            )
     | Ethis -> fst (Smap.find "this" env)
-    | Enull -> basicType "Null" env
+    | Enull -> realBasicType "Null"
     | Eaccess(lv) -> (match lv with
         | Lident(id, inter) ->
             if Smap.mem id env
@@ -256,48 +261,48 @@ let rec type_expr env classesDeclarees (membresClasse : typesAbstraitsParamClass
         ) in 
         (* let t1 = appRec (Eaccess(lv), (fst (snd loc_expr), pos)) in *)
         let t2 = appRec e in
-        if estSousType t2 t1 then basicType "Unit" env else failwith "Affectation invalide."
+        if estSousType t2 t1 then realBasicType "Unit" else failwith "Affectation invalide."
         
     | Eunop(unop, expr) ->
         let t = appRec expr in
         (match unop with
-            | Uneg when estEqTypes t (basicType "Int" env)     -> t
-            | Unot when estEqTypes t (basicType "Boolean" env) -> t
+            | Uneg when estEqTypes t (realBasicType "Int")     -> t
+            | Unot when estEqTypes t (realBasicType "Boolean") -> t
             | _ -> failwith "Operateur unaire utilise sur le mauvais type."
         )
     | Ebinop(binop, e1, e2, pos) ->
         let t1 = appRec e1 in
         let t2 = appRec e2 in
-        let tb = (basicType "Boolean" env) in
+        let tb = (realBasicType "Boolean") in
         (match binop with
-        | Beqphy|Bneqphy when estSousType t1 (basicType "AnyRef" env)
-                           && estSousType t2 (basicType "AnyRef" env) -> tb
-        | Beq|Bneq|Blt|Ble|Bgt|Bge when estEqTypes t1 (basicType "Int" env)
+        | Beqphy|Bneqphy when estSousType t1 (realBasicType "AnyRef")
+                           && estSousType t2 (realBasicType "AnyRef") -> tb
+        | Beq|Bneq|Blt|Ble|Bgt|Bge when estEqTypes t1 (realBasicType "Int")
                                      && estEqTypes t1 t2 -> tb
-        | Badd|Bsub|Bmul|Bdiv|Bmod when estEqTypes t1 (basicType "Int" env)
-                                     && estEqTypes t1 t2 -> basicType "Int" env
+        | Badd|Bsub|Bmul|Bdiv|Bmod when estEqTypes t1 (realBasicType "Int")
+                                     && estEqTypes t1 t2 -> realBasicType "Int"
         | Band|Bor when estEqTypes t1 tb && estEqTypes t2 tb -> tb
         | _ -> failwith "operation binaire invalide."
         )
     | Eprint (exp) ->
         let t = appRec exp in
-        if estEqTypes t (basicType "Int" env)
-        || estEqTypes t (basicType "String" env)
-        then (basicType "Unit" env)
+        if estEqTypes t (realBasicType "Int")
+        || estEqTypes t (realBasicType "String")
+        then (realBasicType "Unit")
         else failwith "Invalid type of print argument."
     | Eif (e_cond, e_then, e_else) ->
         let t1 = appRec e_cond in
         let t2 = appRec e_then in
         let t3 = appRec e_else in
-        if estEqTypes t1 (basicType "Boolean" env)
+        if estEqTypes t1 (realBasicType "Boolean")
         && (estSousType t2 t3  || estSousType t3 t2)
         then ( if estSousType t2 t3 then t3 else t2 )
         else failwith "Condition mal typee"
     | Ewhile(e_cond, e_corps) ->
         let t1 = appRec e_cond in
         let _ = appRec e_corps in
-        if estEqTypes t1 (basicType "Boolean" env)
-        then basicType "Unit" env
+        if estEqTypes t1 (realBasicType "Boolean")
+        then realBasicType "Unit"
         else failwith "while mal type"
     | Enew(nom_classe,ArgsType(args_type),(liste_locd_expr)) ->
         if not (bienForme env classesDeclarees mContraintes (nom_classe, snd loc_expr,ArgsType(args_type)))
@@ -332,8 +337,10 @@ let rec type_expr env classesDeclarees (membresClasse : typesAbstraitsParamClass
         let compo = compose sigma sigmaPrime in
         if not (estSigBF tAbs compo) then failwith "composition mal formee"
         else(
-        List.iter2 (fun x y -> let tpp = appRec x in if not (estSousType tpp (remplaceType (snd y) compo)) then failwith ("sous-typage error, nom_type1 = "^ (getNameOfType tpp) ^ " et nom_type2 = "^ (getNameOfType (remplaceType (snd y) compo)))) liste_expr tPar;
-        remplaceType rv compo
+        let ok = List.for_all2 (fun x y -> let tpp = appRec x in estSousType tpp (remplaceType (snd y) compo)) liste_expr tPar in
+        if not ok then failwith "sous-typage error"
+        else
+            remplaceType rv compo
         )
         )
         
@@ -341,11 +348,11 @@ let rec type_expr env classesDeclarees (membresClasse : typesAbstraitsParamClass
         let rt = fst (Smap.find "return" env) in
         let t = appRec exp in
             if estSousType t rt
-            then basicType "Nothing" env
+            then realBasicType "Nothing"
             else failwith "type de retour invalide"
     | Ebloc(liste_instruction) ->
         (match liste_instruction with
-            | []        -> (basicType "Unit" env)
+            | []        -> (realBasicType "Unit")
             | [Iexpr e] -> (appRec e)
             | instr::q  -> let nextPo = ref (snd (snd loc_expr)) in
                 type_expr (match instr with
@@ -410,12 +417,13 @@ let ajouteMethClasse nom_pere nom_classe mMeth sigma =
     if Smap.mem nom_pere mMeth then Smap.add nom_classe (List.map appli_sigma (Smap.find nom_pere mMeth)) mMeth
     else mMeth
 
-let extendTenTprimeStep1 env classesDeclarees mContraintes membresClasse methC listeT = 
+let extendTenTprimeStep1 env classesDeclarees mContraintes membresClasse methC listeT =
+    let realBasicType = basicType classesDeclarees in
     let checkTi (newCD, newConstraints, newMembresClasse, newMethC) x =
         match x with
-        | PTsimple(nom)        -> (Smap.add nom (Class(nom, [], [], (basicType "AnyRef" env, []), [])) newCD, newConstraints, newMembresClasse, newMethC)
+        | PTsimple(nom)        -> (Smap.add nom (Class(nom, [], [], (realBasicType "AnyRef", []), [])) newCD, newConstraints, newMembresClasse, newMethC)
         | PTbigger(nom, typ)   -> if not (bienForme env newCD newConstraints typ) then failwith "mal forme" else (
-                                    let nnCD = Smap.add nom (Class(nom, [], [], (basicType "AnyRef" env, []), [])) newCD in
+                                    let nnCD = Smap.add nom (Class(nom, [], [], (realBasicType "AnyRef", []), [])) newCD in
                                     let nnCT = Smap.add nom ([typ]) newConstraints in
                                     (nnCD, nnCT, newMembresClasse, newMethC)
                                     )
@@ -501,10 +509,11 @@ let rec type_class env classesDeclarees membresClasse mContraintes methC classe 
     )
 
 (*main n'a pas le droit de s'instancier elle-même. TODO *)
-let typeMain env classesDeclarees membresClasse mContraintes methC classe = 
-    type_class env classesDeclarees membresClasse mContraintes methC (Class("Main", [], [], (basicType "AnyVal" env, []), classe))
+let typeMain env classesDeclarees membresClasse mContraintes methC classe =
+    type_class env classesDeclarees membresClasse mContraintes methC (Class("Main", [], [], (basicType classesDeclarees "AnyVal", []), classe))
 
-let getDefaultEnv = 
+let getDefaultEnv = Smap.empty
+(*
     let res = Smap.empty in
     let res = Smap.add "Any" (("Any",dummy_inter,ArgsType([])),true) res in
     let res = Smap.add "AnyVal" (("AnyVal",dummy_inter,ArgsType([])),true) res in
@@ -512,32 +521,31 @@ let getDefaultEnv =
     let res = Smap.add "Unit" (("Unit",dummy_inter,ArgsType([])),true) res in
     let res = Smap.add "Int" (("Int",dummy_inter,ArgsType([])),true) res in
     let res = Smap.add "Boolean" (("Boolean",dummy_inter,ArgsType([])),true) res in
-    let res = Smap.add "String" (("Any",dummy_inter,ArgsType([])),true) res in
+    let res = Smap.add "String" (("String",dummy_inter,ArgsType([])),true) res in
     let res = Smap.add "Null" (("Null",dummy_inter,ArgsType([])),true) res in
     let res = Smap.add "Nothing" (("Nothing",dummy_inter,ArgsType([])),true) res in
     res
+*)
+let makeBC nom_classe nom_pere classesDeclarees =
+    Class(nom_classe, [], [], (basicType classesDeclarees nom_pere, []), [])
 
-let makeBC nom_classe nom_pere env =
-    Class(nom_classe, [], [], (basicType nom_pere env, []), [])
-
-let getDefaultCl env = 
-    let res = Smap.empty in
-    let res = Smap.add "Any" (makeBC "Any" "Any" env) res in
-    let res = Smap.add "AnyVal" (makeBC "AnyVal" "Any" env) res in
-    let res = Smap.add "AnyRef" (makeBC "AnyRef" "Any" env) res in
-    let res = Smap.add "Unit" (makeBC "Unit" "AnyVal" env) res in
-    let res = Smap.add "Int" (makeBC "Int" "AnyVal" env) res in
-    let res = Smap.add "Boolean" (makeBC "Boolean" "AnyVal" env) res in
-    let res = Smap.add "String" (makeBC "String" "AnyRef" env) res in
-    let res = Smap.add "Null" (makeBC "Null" "String" env) res in
-    let res = Smap.add "Nothing" (makeBC "Nothing" "Null" env) res in
-    let res = Smap.add "Array" (Class("Array", [(ModifNone, PTsimple("T"))], [], (basicType "AnyVal" env,[]),[])) res in
-    res
+let getDefaultCl = 
+    let classes = Smap.add "Any" (Class("Any", [], [], (("Any",dummy_inter, ArgsType []), []), [])) Smap.empty in
+    let classes = Smap.add "AnyVal"  (makeBC "AnyVal"  "Any"    classes) classes in
+    let classes = Smap.add "AnyRef"  (makeBC "AnyRef"  "Any"    classes) classes in
+    let classes = Smap.add "Unit"    (makeBC "Unit"    "AnyVal" classes) classes in
+    let classes = Smap.add "Int"     (makeBC "Int"     "AnyVal" classes) classes in
+    let classes = Smap.add "Boolean" (makeBC "Boolean" "AnyVal" classes) classes in
+    let classes = Smap.add "String"  (makeBC "String"  "AnyRef" classes) classes in
+    let classes = Smap.add "Null"    (makeBC "Null"    "String" classes) classes in
+    let classes = Smap.add "Nothing" (makeBC "Nothing" "Null"   classes) classes in
+    let classes = Smap.add "Array"   (Class("Array", [(ModifNone, PTsimple("T"))], [], (basicType classes "AnyRef",[]),[])) classes in
+    classes
 
 let typeFichier f =
     let mContraintes = Smap.empty in
     let env = getDefaultEnv in
-    let clDecl = getDefaultCl env in
+    let clDecl = getDefaultCl in
     let memCl = Smap.empty in
     let methC = Smap.empty in
     let rec typeRecCl curClDecl curMemCl curMethC l = (match l with
