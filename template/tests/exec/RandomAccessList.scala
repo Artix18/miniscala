@@ -20,7 +20,7 @@ class Cons[E](one: Boolean, e: E, s: RandomAccessList[Pair[E, E]])
 extends RandomAccessList[E] {
 
   override def length(): Int =
-    2 * this.s.length() + (if (one) 1 else 0);
+    (if (one) 1 else 0);
 
   override def get(i: Int) : E = {
     if (one) {

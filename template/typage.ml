@@ -447,6 +447,22 @@ let extendTenTprimeStep1 env classesDeclarees mContraintes membresClasse methC l
 let extendStep3 env nCD mCT listeParams =
     List.fold_left (fun nEnv (nom, typ) -> if not (bienForme env nCD mCT typ) then failwith "fail etape 3" else Smap.add nom (typ, true) nEnv) env listeParams
 
+let ajouteVarConstruct nom_classe parList membresClasse = 
+    let transforme pl =
+        List.map (fun (a,b) -> (a,true,b)) pl
+    in
+    let rec fusion l1 l2 = (*l1 ecrase l2, comme ça les params constructeurs ecrasent l'heritage.*)
+        match l2 with
+        | [] -> l1
+        | a::b -> if List.mem a l1 then fusion l1 b else fusion (a::l1) b
+    in
+    let lToAdd = transforme parList in
+    if Smap.mem nom_classe membresClasse then
+        let l = (Smap.find nom_classe membresClasse) in
+        Smap.add nom_classe (fusion lToAdd l) membresClasse
+    else
+        Smap.add nom_classe lToAdd membresClasse
+
 let rec type_class env classesDeclarees membresClasse mContraintes methC classe = 
     let rvCd = ref classesDeclarees in
     let rvMembresClasse = ref membresClasse in
@@ -487,6 +503,9 @@ let rec type_class env classesDeclarees membresClasse mContraintes methC classe 
         (* step 3*)
         (*let newEnv = List.fold_left (fun nEnv (nom, typ) -> if not (bienForme env newClassesDeclarees mContraintes typ) then failwith "fail etape 3" else Smap.add nom (typ, true) nEnv) (Smap.add "this" ((className classe, assert(false), ArgsType(listeTypeFromPTs listeT)), true) env) (classParams classe) in*)
         let newEnv = extendStep3 (Smap.add "this" ((className classe, dummy_inter, ArgsType(listeTypeFromPTs listeT)), true) env) newClassesDeclarees mContraintes (classParams classe) in
+        
+        let membresClasse = ajouteVarConstruct nom_classe (classParams classe) membresClasse in
+        rvMembresClasse := ajouteVarConstruct nom_classe (classParams classe) (!rvMembresClasse);
         (*step 4*)
         let _ = type_expr newEnv newClassesDeclarees membresClasse newMContraintes methC (Enew(tpName, ArgsType(tpList), exp_list),dummy_inter) in
         (*step 5*)
@@ -496,7 +515,7 @@ let rec type_class env classesDeclarees membresClasse mContraintes methC classe 
             | Dvar(var) -> let resTyp = type_expr newEnv newClassesDeclarees newMembresClasse newMContraintes newMethC (Ebloc([Idef(var); Iexpr(Eaccess(Lident(varName var,dummy_inter)), dummy_inter)]),dummy_inter) in
                            let nnMCl = ajouteMembre newMembresClasse nom_classe (varName var, varConst var, resTyp) in
                            rvMembresClasse := ajouteMembre (!rvMembresClasse) nom_classe (varName var, varConst var, resTyp);
-                           (newEnv, newClassesDeclarees, nnMCl, newMContraintes, newMethC)
+                           (newEnv, newClassesDeclarees, nnMCl, newMContraintes, newMethC) (*TODO check si je le fais bien *)
             | Dmeth(methode) -> let (do_override,ident,param_type_list,param_list,typ,locd_expr,interv) = methode in
                                 let nnCD,nnMCT,newMembresClasse,newMethC=extendTenTprimeStep1 newEnv newClassesDeclarees newMContraintes newMembresClasse newMethC param_type_list in
                       
