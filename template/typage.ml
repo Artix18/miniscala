@@ -240,7 +240,7 @@ let rec type_expr env classesDeclarees membresClasse mContraintes methC loc_expr
             let typeAbsX = fst (getTypeAbstrait nom_classe x membresClasse) in (*nom_classe.x*)
             remplaceType typeAbsX (construitSigma nom_classe listeTypePar classesDeclarees)
             )
-            else failwith "on ne devrait pas gerer les appels de classes ou autres ici. La variable nom_classe.x n'existe pas"
+            else failwith ("on ne devrait pas gerer les appels de methodes ou autres ici. La variable nom_classe.x n'existe pas : nom_classe = " ^ nom_classe ^ " et nom_x = " ^ x)
         )
     | Eaffect(lv,e,pos) -> let t1 = (match lv with
         | Lident (id, inter)      ->
