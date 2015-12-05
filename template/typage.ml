@@ -307,21 +307,24 @@ let rec type_expr env classesDeclarees membresClasse mContraintes methC loc_expr
         if estEqTypes t (realBasicType "Int")
         || estEqTypes t (realBasicType "String")
         then (realBasicType "Unit")
-        else failwith "Invalid type of print argument."
+        else raise (Type_error ((Printf.sprintf "This expression has type %a, but was expected to be Int or String." typeDisplay t), snd exp))
     | Eif (e_cond, e_then, e_else) ->
         let t1 = appRec e_cond in
+        if not (estEqTypes t1 (realBasicType "Boolean"))
+            then raise (Type_error ((Printf.sprintf "This expression has type %a, but was expected to be Boolean." typeDisplay t1), snd e_cond)) else
         let t2 = appRec e_then in
         let t3 = appRec e_else in
-        if estEqTypes t1 (realBasicType "Boolean")
-        && (estSousType t2 t3  || estSousType t3 t2)
+        if (estSousType t2 t3  || estSousType t3 t2)
         then ( if estSousType t2 t3 then t3 else t2 )
-        else failwith "Condition mal typee"
+        else if fst e_else == Ecst Cunit
+            then raise (Type_error ((Printf.sprintf "This expression has type %a, but was expected to be Unit." typeDisplay t2), snd e_then))
+            else raise (Type_error ((Printf.sprintf "These expressions have incompatible types %a and %a." typeDisplay t2 typeDisplay t3), (fst(snd e_then),snd(snd e_else)) ))
     | Ewhile(e_cond, e_corps) ->
-        let t1 = appRec e_cond in
+        let t = appRec e_cond in
         let _ = appRec e_corps in
-        if estEqTypes t1 (realBasicType "Boolean")
+        if estEqTypes t (realBasicType "Boolean")
         then realBasicType "Unit"
-        else failwith "while mal type"
+        else raise (Type_error ((Printf.sprintf "This expression has type %a, but was expected to be Boolean." typeDisplay t), snd e_cond))
     | Enew(nom_classe,ArgsType(args_type),(liste_locd_expr)) ->
         if not (estBF (nom_classe, snd loc_expr,ArgsType(args_type)))
         then failwith "C[sigma] pas bien forme"
