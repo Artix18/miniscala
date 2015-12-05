@@ -332,10 +332,8 @@ let rec type_expr env classesDeclarees (membresClasse : typesAbstraitsParamClass
         let compo = compose sigma sigmaPrime in
         if not (estSigBF tAbs compo) then failwith "composition mal formee"
         else(
-        let ok = List.for_all2 (fun x y -> let tpp = appRec x in estSousType tpp (remplaceType (snd y) compo)) liste_expr tPar in
-        if not ok then failwith "sous-typage error"
-        else
-            remplaceType rv compo
+        List.iter2 (fun x y -> let tpp = appRec x in if not (estSousType tpp (remplaceType (snd y) compo)) then failwith ("sous-typage error, nom_type1 = "^ (getNameOfType tpp) ^ " et nom_type2 = "^ (getNameOfType (remplaceType (snd y) compo)))) liste_expr tPar;
+        remplaceType rv compo
         )
         )
         
@@ -407,12 +405,26 @@ let ajouteMethode nom_classe methode methC =
     if Smap.mem nom_classe methC then Smap.add nom_classe (methode::(Smap.find nom_classe methC)) methC
     else Smap.add nom_classe [methode] methC
 
-let ajouteMemClasse nom_pere nom_classe mMem = 
-    if Smap.mem nom_pere mMem then Smap.add nom_classe (Smap.find nom_pere mMem) mMem
+let ajouteMemClasse nom_pere nom_classe mMem sigma = 
+    let appli_sigma (ident,isCst,typ) = 
+        (ident, isCst, remplaceType typ sigma)
+    in
+    if Smap.mem nom_pere mMem then Smap.add nom_classe (List.map appli_sigma (Smap.find nom_pere mMem)) mMem
     else mMem
 
-let ajouteMethClasse nom_pere nom_classe mMeth = 
-    if Smap.mem nom_pere mMeth then Smap.add nom_classe (Smap.find nom_pere mMeth) mMeth
+let enlevePtlASigma ptl sigma = 
+    Smap.filter (fun x y -> not (List.mem x ptl)) sigma
+
+let appliqueSigmaAPl sigma pl = 
+    List.map (fun (a,typ) -> (a, remplaceType typ sigma)) pl
+
+let ajouteMethClasse nom_pere nom_classe mMeth sigma = 
+    let appli_sigma (do_over, ident, ptl, pl, typ, locd_expr, interv) =
+        (*je crois qu'on peut appliquer bêtement sigma à pl et typ. Mais il faut retirer ceux de ptl *)
+        let sigmaPrime = enlevePtlASigma (lPAFromPT ptl) sigma in
+        ((do_over, ident, ptl, appliqueSigmaAPl sigmaPrime pl, remplaceType typ sigmaPrime, locd_expr, interv):methode)
+    in
+    if Smap.mem nom_pere mMeth then Smap.add nom_classe (List.map appli_sigma (Smap.find nom_pere mMeth)) mMeth
     else mMeth
 
 let rec type_class env classesDeclarees membresClasse mContraintes methC classe = 
@@ -443,12 +455,15 @@ let rec type_class env classesDeclarees membresClasse mContraintes methC classe 
         (* il faut ajouter tous les trucs du pere de classe à Gamma *)
         (* mais pas à Gamma' pour eviter qu'une classe s'appelle elle même. Mais du coup il faut pouvoir appeler les fonctions du pere*)
         (*en fait si, mais il faut faire gaffe à remplacer t avec les params de C...*)
-        rvMembresClasse := ajouteMemClasse tpName nom_classe (!rvMembresClasse);
-        rvMethC := ajouteMethClasse tpName nom_classe (!rvMethC);
+        
+        let ptitSigma = construitSigma tpName tpList classesDeclarees in
+        
+        rvMembresClasse := ajouteMemClasse tpName nom_classe (!rvMembresClasse) ptitSigma;
+        rvMethC := ajouteMethClasse tpName nom_classe (!rvMethC) ptitSigma;
         
         let newClassesDeclarees = Smap.add nom_classe classe newClassesDeclarees in
-        let membresClasse       = ajouteMemClasse tpName nom_classe membresClasse in
-        let methC               = ajouteMethClasse tpName nom_classe methC in
+        let membresClasse       = ajouteMemClasse  tpName nom_classe membresClasse ptitSigma in
+        let methC               = ajouteMethClasse tpName nom_classe methC ptitSigma in
         (* step 3*)
         (*let newEnv = List.fold_left (fun nEnv (nom, typ) -> if not (bienForme env newClassesDeclarees mContraintes typ) then failwith "fail etape 3" else Smap.add nom (typ, true) nEnv) (Smap.add "this" ((className classe, assert(false), ArgsType(listeTypeFromPTs listeT)), true) env) (classParams classe) in*)
         let newEnv = extendStep3 (Smap.add "this" ((className classe, dummy_inter, ArgsType(listeTypeFromPTs listeT)), true) env) newClassesDeclarees mContraintes (classParams classe) in
