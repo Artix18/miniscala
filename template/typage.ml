@@ -1,6 +1,7 @@
 open Ast
 open Parser
 open Lexing
+open Format
 
 module Smap = Map.Make(String)
 type env = (typ * bool) Smap.t (*string = ident *)
@@ -240,7 +241,11 @@ let rec type_expr env classesDeclarees membresClasse mContraintes methC loc_expr
             let typeAbsX = fst (getTypeAbstrait nom_classe x membresClasse) in (*nom_classe.x*)
             remplaceType typeAbsX (construitSigma nom_classe listeTypePar classesDeclarees)
             )
-            else failwith ("on ne devrait pas gerer les appels de methodes ou autres ici. La variable nom_classe.x n'existe pas : nom_classe = " ^ nom_classe ^ " et nom_x = " ^ x)
+            else
+            (
+                eprintf "\nEn fait ça va être ligne %d, caractères %d - %d :\n" ((fst inter).pos_lnum) ((fst inter).pos_cnum - (fst inter).pos_bol + 1) ((snd inter).pos_cnum - (snd inter).pos_bol + 1);
+                failwith ("on ne devrait pas gerer les appels de methodes ou autres ici. La variable nom_classe.x n'existe pas : nom_classe = " ^ nom_classe ^ " et nom_x = " ^ x)
+            )
         )
     | Eaffect(lv,e,pos) -> let t1 = (match lv with
         | Lident (id, inter)      ->
