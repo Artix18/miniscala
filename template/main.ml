@@ -43,20 +43,31 @@ let () =
     print_newline()
   with
     | Lexer.Lexing_error s ->
-	report (lexeme_start_p lb, lexeme_end_p lb);
-	eprintf "lexical error: %s@." s;
-	exit 1
+	    report (lexeme_start_p lb, lexeme_end_p lb);
+	    eprintf "lexical error: %s@." s;
+	    exit 1
 	| Syntax_error s -> 
-	eprintf "custom syntax error: %s@." s;
-	exit 1
+	    eprintf "custom syntax error: %s@." s;
+	    exit 1
     | Parser.Error ->
-	report (lexeme_start_p lb, lexeme_end_p lb);
-	eprintf "syntax error@.";
-	exit 1
+	    report (lexeme_start_p lb, lexeme_end_p lb);
+	    eprintf "syntax error@.";
+	    exit 1
+	| Param_error (s, interv) ->
+	    report interv;
+	    eprintf "parameter list error: %s@." s;
+	    exit 1
+	| Unbound_error (s, interv) ->
+	    report interv;
+	    eprintf "unbound name error: %s@." s;
+	    exit 1
+	| Type_error (s, interv) ->
+	    report interv;
+	    eprintf "type error: %s@." s;
+	    exit 1
     | e ->
-    report (lexeme_start_p lb, lexeme_end_p lb);
-	eprintf "Anomaly: %s\n@." (Printexc.to_string e);
-	exit 2
+	    eprintf "Anomaly: %s\n@." (Printexc.to_string e);
+	    exit 2
 
 
 
