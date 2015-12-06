@@ -93,13 +93,23 @@ let rec remplaceType typ mSigma = (* mSigma associe à un nom abstrait son type 
     else
         (name, inter, ArgsType(List.map (fun x -> remplaceType x mSigma) l))
 
-let construitSigma nom_classe paramsConcrets classesDeclarees = 
-    construitMapAssociative (listeParamsAbstraits (Smap.find nom_classe classesDeclarees)) paramsConcrets
+let construitSigma nom_classe paramsConcrets classesDeclarees =
+    if not (Smap.mem nom_classe classesDeclarees)
+    then raise (Unbound_error (Printf.sprintf "Type name %s doesn't exist." nom_classe, dummy_inter))
+    else construitMapAssociative (listeParamsAbstraits (Smap.find nom_classe classesDeclarees)) paramsConcrets
 
 let rec sousType classesDeclarees mContraintes t1 t2 =
     let estSousType = sousType classesDeclarees mContraintes in
     let realBasicType = basicType classesDeclarees in
-    let (c1,_,ArgsType(l1)) = t1 and (c2,_,ArgsType(l2)) = t2 in match c1, c2 with
+    let (c1,inter1,ArgsType(l1)) = t1
+    and (c2,inter2,ArgsType(l2)) = t2 in
+    
+    if not (Smap.mem c1 classesDeclarees)
+    then raise (Unbound_error (Printf.sprintf "Type name %s doesn't exist." c1, inter1));
+    if not (Smap.mem c2 classesDeclarees)
+    then raise (Unbound_error (Printf.sprintf "Type name %s doesn't exist." c2, inter2));
+    
+    match c1, c2 with
     | "Nothing", _ -> true
     | "Null",    _ -> not (estSousType t2 (realBasicType "AnyVal"))
     | c1(* *),     c2(* *) when c1=c2 ->
@@ -112,8 +122,16 @@ let rec sousType classesDeclarees mContraintes t1 t2 =
             | ModifMinus -> estSousType z y
         ) in
         lfor_all3 p listeTypeAbstraits l1 l2
-    | c1(* *),     c2(* *) when fleche c1 c2 classesDeclarees -> let papaC1 = (typePere c1 classesDeclarees) in let typePapa = remplaceType papaC1 (construitSigma c1 l1 classesDeclarees) in estSousType typePapa t2 (*il faut maintenant calculer le type de papaC1 avec sigma *)(*on sait que c1 != c2 ici donc c1->c2 <=> pere(c1)->c2 *) (*peut bugger si on herite de X[X], dans ce cas il faudrait pas remplacer le nom de la classe. *)
-    | c1(* *),     c2      when Smap.mem c2 mContraintes -> List.exists (fun x -> estSousType t1 x) (Smap.find c2 mContraintes) (*je ne sais pas si on peut parler de max ici parce que je ne comprends pas C2>:t, donc on parcourt toutes les relations, mais il est possible que l'on puisse faire mieux*) (*TODO il n'y a qu'une seule contrainte par nom normalement *)
+    | c1, c2 when fleche c1 c2 classesDeclarees ->
+        let papaC1 = (typePere c1 classesDeclarees) in
+        let typePapa = remplaceType papaC1 (construitSigma c1 l1 classesDeclarees) in
+        estSousType typePapa t2
+        (*il faut maintenant calculer le type de papaC1 avec sigma *)
+        (*on sait que c1 != c2 ici donc c1->c2 <=> pere(c1)->c2 *)
+        (*peut bugger si on herite de X[X], dans ce cas il faudrait pas remplacer le nom de la classe. *)
+    | c1, c2 when Smap.mem c2 mContraintes ->
+        List.exists (fun x -> estSousType t1 x) (Smap.find c2 mContraintes)
+        (*TODO il n'y a qu'une seule contrainte par nom normalement *)
     | _ -> false
 (* dans le dernier cas, C1 != Nothing donc C != Nothing et C!=Null donc on peut juste suivre les peres de "extends" *)
 and eqTypes classesDeclarees mContraintes a b =
@@ -514,7 +532,7 @@ let rec type_class classesDeclarees membresClasse mContraintes methC classe =
                             
                             let nnMethC = ajouteMethode nom_classe methode newMethC in
                             rvMethC := ajouteMethode nom_classe methode (!rvMethC);
-
+                            
                             let s_t = (type_expr nnEnv nnCD newMembresClasse nnMCT nnMethC locd_expr) in
                             if not (sousType nnCD nnMCT s_t typRet)
                             then raise (Type_error ((Printf.sprintf "This expression has type %a, but was expected to be castable to %a." typeDisplay s_t typeDisplay typRet), snd locd_expr))
