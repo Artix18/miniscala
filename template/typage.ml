@@ -353,26 +353,29 @@ let rec type_expr env classesDeclarees membresClasse mContraintes methC loc_expr
         sigmaBienForme classesDeclarees mContraintes tAbs compo;
         with Sigma_error s_err -> raise (Type_error (Printf.sprintf "For method %s.%s, %s" nom_classe nom_meth s_err, inter)));
         
-        let ok = List.for_all2 (fun x y -> let tpp = appRec x in estSousType tpp (remplaceType (snd y) compo)) liste_expr tPar in
-        if not ok then failwith "sous-typage error"
-        else
-            remplaceType rv compo
+        let checkSousTypage ex y =
+            let tex = appRec ex in
+            let tref = remplaceType (snd y) compo in
+            if not (estSousType tex tref)
+            then raise (Type_error ((Printf.sprintf "This expression has type %a, but was expected to be castable to %a." typeDisplay tex typeDisplay tref), snd ex))
+        in
+        List.iter2 checkSousTypage liste_expr tPar;
+        remplaceType rv compo
         )
-        
         
     | Ereturn(exp) ->
         let rt = fst (Smap.find "return" env) in
         let t = appRec exp in
-            if estSousType t rt
-            then realBasicType "Nothing"
-            else failwith "type de retour invalide"
+        if estSousType t rt
+        then realBasicType "Nothing"
+        else raise (Type_error ((Printf.sprintf "This expression has type %a, but was expected to be castable to %a." typeDisplay t typeDisplay rt), snd exp))
     | Ebloc(liste_instruction) ->
         (match liste_instruction with
             | []        -> (realBasicType "Unit")
             | [Iexpr e] -> (appRec e)
             | instr::q  -> let nextPo = ref (snd (snd loc_expr)) in
                 type_expr (match instr with
-                | Iexpr (e, (_,finVar))                      -> nextPo := finVar; env
+                | Iexpr (e, (d,finVar))                      -> nextPo := finVar; let _ = appRec (e,(d,finVar)) in env
                 | Idef  (isCst,name,typOpt,init,(_, finVar)) -> nextPo := finVar;
                     (let typInit = appRec init in
                     match typOpt with
