@@ -490,6 +490,15 @@ let ajouteVarConstruct nom_classe parList membresClasse =
     else
         Smap.add nom_classe lToAdd membresClasse
 
+let listeConstruct name classesDeclarees = 
+    if not (Smap.mem name classesDeclarees) then failwith "oups. ça ne devrait pas arriver...";
+    let Class(_,_,_,pList,_,_) = Smap.find name classesDeclarees in
+    lPAFromPL pList
+
+let getVarOfCl name classesDeclarees membresClasse = 
+    if not (Smap.mem name membresClasse) then []
+    else List.filter (fun x -> not (List.mem x (listeConstruct name classesDeclarees))) (List.map (fun (n,_,_) -> n) (Smap.find name membresClasse))
+
 let rec type_class classesDeclarees membresClasse mContraintes methC classe = 
     let Class(nom_classe,inter,listePTC,pList,(typPere, exp_list),liste_decl) = classe in
     
@@ -545,16 +554,32 @@ let rec type_class classesDeclarees membresClasse mContraintes methC classe =
     let _ = type_expr newEnv newClassesDeclarees membresClasse newMContraintes methC (Enew(tpName, ArgsType(tpList), exp_list),dummy_inter) in
 
     (*step 5*)
+    let curVDecl = ref ((lPAFromPL pList)@(getVarOfCl tpName classesDeclarees membresClasse)) in
+    let curMDecl = ref [] in
     let type_decl megaEnv decl = 
         let (newClassesDeclarees, newMembresClasse, newMContraintes, newMethC) = megaEnv in
         match decl with
-        | Dvar(var) ->
+        | Dvar(var) -> 
+            let (_,_,_,_,inter) = var in 
+            
+            if List.mem (varName var) (!curVDecl) then 
+                raise (Unicity_error(Printf.sprintf "Variable %s already declared in the current class %s (or its constructor, or its parents)." (varName var) nom_classe, inter));
+            curVDecl := (varName var)::(!curVDecl);
+
             let resTyp = type_expr newEnv newClassesDeclarees newMembresClasse newMContraintes newMethC (Ebloc([Idef(var); Iexpr(Eaccess(Lident(varName var,dummy_inter)), dummy_inter)]),dummy_inter) in
+            
             let nnMCl = ajouteMembre newMembresClasse nom_classe (varName var, varConst var, resTyp) in
+            
             rvMembresClasse := ajouteMembre (!rvMembresClasse) nom_classe (varName var, varConst var, resTyp);
+            
             (newClassesDeclarees, nnMCl, newMContraintes, newMethC) (*TODO check si je le fais bien *)
+            
         | Dmeth(methode) ->
             let (do_override,ident,param_type_list,param_list,typRet,locd_expr,interv) = methode in
+        
+            if List.mem ident (!curMDecl) then
+                raise (Unicity_error(Printf.sprintf "Method %s already declared in the current class %s." (ident) nom_classe, interv));
+            curMDecl := ident::(!curMDecl);
         
             if doublon (lPAFromPT param_type_list) then
                 raise (Unicity_error(Printf.sprintf "Types parameters should have different names in method %s (from class %s) declaration." ident nom_classe, interv));
