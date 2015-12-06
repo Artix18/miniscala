@@ -4,7 +4,7 @@ open Lexing
 open Printf
 
 module Smap = Map.Make(String)
-type env = (typ * bool) Smap.t (*string = ident *)
+type env = (typ * bool) Smap.t (* string = ident, isConst *)
 type typesAbstraitsParamClasse = ((ident * bool (* isConst *) * typ) list) Smap.t (* ident, est cst, typ *)
 type classesDeclarees = clas Smap.t
 type methodesClasses = (methode list) Smap.t
@@ -251,16 +251,12 @@ let rec type_expr env classesDeclarees membresClasse mContraintes methC loc_expr
             )
             else raise (Unbound_error (Printf.sprintf "Class %s has no field named %s." nom_classe x, inter))
         )
+    | Eaffect(Lident (id, inter), e, pos) when not (Smap.mem id env) -> appRec (Eaffect(Laccess((Ethis,inter), id, inter),e,pos), inter)
     | Eaffect(lv,e,pos) -> let t1 = (match lv with
         | Lident (id, inter)      ->
-            if Smap.mem id env
-            then
-            (
-                let (ty,isConst) = Smap.find id env in
-                if isConst then raise (Type_error (Printf.sprintf "Local value %s is constant." id, inter))
-                else ty
-            )
-            else appRec (Eaccess(Laccess((Ethis,inter), id, inter)), inter)
+            let (ty,isConst) = Smap.find id env in
+            if isConst then raise (Type_error (Printf.sprintf "Local value %s is constant." id, inter))
+            else ty
         | Laccess(ex, x, inter) ->
             let typeDeEx = appRec ex in 
             let (nom_classe,b,ArgsType(listeTypePar)) = typeDeEx in
@@ -380,9 +376,9 @@ let rec type_expr env classesDeclarees membresClasse mContraintes methC loc_expr
                     (let typInit = appRec init in
                     match typOpt with
                         | None          -> Smap.add name (typInit, isCst) env
-                        | Some typName  ->
+                        | Some typName  -> estBF typName;
                             if not(estSousType typInit typName) then
-                                failwith "initialisation mal typee"
+                                raise (Type_error ((Printf.sprintf "This expression has type %a, but was expected to be castable to %a." typeDisplay typInit typeDisplay typName), snd init))
                             else
                                 Smap.add name (typName, isCst) env
                     )
@@ -536,7 +532,9 @@ let rec type_class classesDeclarees membresClasse mContraintes methC classe =
                             let nnMethC = ajouteMethode nom_classe methode newMethC in
                             rvMethC := ajouteMethode nom_classe methode (!rvMethC);
                             
-                            if not (sousType nnCD nnMCT (type_expr nnEnv nnCD newMembresClasse nnMCT nnMethC locd_expr) typ) then failwith "probleme step5"
+                            let s_t = (type_expr nnEnv nnCD newMembresClasse nnMCT nnMethC locd_expr) in
+                            if not (sousType nnCD nnMCT s_t typ)
+                            then raise (Type_error ((Printf.sprintf "This expression has type %a, but was expected to be castable to %a." typeDisplay s_t typeDisplay typ), snd locd_expr))
                             else (** TODO : check override **)(newClassesDeclarees, newMembresClasse, newMContraintes, nnMethC)
     in
     let _ = List.fold_left type_decl (newClassesDeclarees, membresClasse, newMContraintes, methC) liste_decl in
