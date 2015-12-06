@@ -12,6 +12,7 @@ type methodesClasses = (methode list) Smap.t
 exception Param_error of string * interv
 exception Unbound_error of string * interv
 exception Type_error of string * interv
+exception Return_error of string * interv
 
 exception Sigma_error of string
 
@@ -344,6 +345,7 @@ let rec type_expr env classesDeclarees membresClasse mContraintes methC loc_expr
         )
         
     | Ereturn(exp) ->
+        if not (Smap.mem "return" env) then raise (Return_error ((Printf.sprintf "Use of return outside of a method."), snd loc_expr));
         let rt = fst (Smap.find "return" env) in
         let t = appRec exp in
         if estSousType t rt

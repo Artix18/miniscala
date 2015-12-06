@@ -65,6 +65,10 @@ let () =
 	    report interv;
 	    eprintf "type error: %s@." s;
 	    exit 1
+	| Return_error (s, interv) ->
+	    report interv;
+	    eprintf "return error: %s@." s;
+	    exit 1
     | e ->
 	    eprintf "Anomaly: %s\n@." (Printexc.to_string e);
 	    exit 2
