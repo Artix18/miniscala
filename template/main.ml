@@ -73,6 +73,10 @@ let () =
 	    report interv;
 	    eprintf "unicity error: %s@." s;
 	    exit 1
+	| Variance_error (s, interv) ->
+	    report interv;
+	    eprintf "variance error: %s@." s;
+	    exit 1
     | e ->
 	    eprintf "Anomaly: %s\n@." (Printexc.to_string e);
 	    exit 2

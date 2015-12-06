@@ -7,6 +7,7 @@ module Smap = Map.Make(String)
 type env = (typ * bool) Smap.t (* string = ident, isConst *)
 type typesAbstraitsParamClasse = ((ident * bool (* isConst *) * typ) list) Smap.t (* ident, est cst, typ *)
 type classesDeclarees = clas Smap.t
+type varianceParamsClasse = (modifPTC list) Smap.t
 type methodesClasses = (methode list) Smap.t
 
 exception Param_error of string * interv
@@ -14,6 +15,7 @@ exception Unbound_error of string * interv
 exception Type_error of string * interv
 exception Return_error of string * interv
 exception Unicity_error of string * interv
+exception Variance_error of string * interv
 
 exception Sigma_error of string
 
@@ -207,12 +209,29 @@ let checkMeth nom_classe meth methC =
 
 let getIdentLv lv = match lv with   | Lident(ident,_)|Laccess(_,ident,_)->ident
 
+
+let rec checkVariance vPC mapVariance modif (t : typ) =
+    let (nom,inter,ArgsType tl) = t in(
+    (if Smap.mem nom mapVariance then match Smap.find nom mapVariance with
+    | ModifPlus  -> if modif <> ModifPlus  then raise (Variance_error (Printf.sprintf "Type %a should be in a positive position" typeDisplay t, inter))
+    | ModifNone  -> ()
+    | ModifMinus -> if modif <> ModifMinus then raise (Variance_error (Printf.sprintf "Type %a should be in a negative position" typeDisplay t, inter))
+    );
+    
+    if Smap.mem nom vPC then (
+    let xor m1 m2 = match m1,m2 with
+    | ModifPlus,  ModifPlus  | ModifMinus, ModifMinus -> ModifPlus
+    | ModifMinus, ModifPlus  | ModifPlus,  ModifMinus -> ModifPlus
+    | _, _ -> ModifNone
+    in
+    List.iter2 (fun varBase nouvType -> checkVariance vPC mapVariance (xor modif varBase) nouvType) (Smap.find nom vPC) tl);)
+
 (* j'ai mis nawak pour les loc_expr et inter, à toi de voir. Mais ça compile *)
-let rec type_expr env loc_var classesDeclarees membresClasse mContraintes methC loc_expr =
+let rec            type_expr mapVariance vPC env loc_var classesDeclarees membresClasse mContraintes methC loc_expr =
+    let appRec   = type_expr mapVariance vPC env []      classesDeclarees membresClasse mContraintes methC in 
+    let appRec2  = type_expr mapVariance vPC env loc_var classesDeclarees membresClasse mContraintes methC in 
     let estSousType = sousType    classesDeclarees mContraintes in
     let estEqTypes  = eqTypes     classesDeclarees mContraintes in
-    let appRec   = type_expr env  [] classesDeclarees membresClasse mContraintes methC in 
-    let appRec2  = type_expr env  loc_var classesDeclarees membresClasse mContraintes methC in 
     let estBF    = bienForme      classesDeclarees mContraintes in
     let realBasicType = basicType classesDeclarees in
     match fst loc_expr with
@@ -374,22 +393,26 @@ let rec type_expr env loc_var classesDeclarees membresClasse mContraintes methC 
             | []        -> (realBasicType "Unit")
             | [Iexpr e] -> (appRec e)
             | instr::q  -> let nextPo = ref (snd (snd loc_expr)) in
-                type_expr (match instr with
+                           let nextLV = ref loc_var in
+                type_expr mapVariance vPC (match instr with
                 | Iexpr (e, (d,finVar))                      -> nextPo := finVar; let _ = appRec2 (e,(d,finVar)) in env
-                | Idef  (isCst,name,typOpt,init,(_, finVar)) -> nextPo := finVar;
+                | Idef  (isCst,name,typOpt,init,(_, finVar)) -> nextPo := finVar; nextLV := name::loc_var;
+                    
+                    
                     if List.mem name loc_var then
                         raise (Unicity_error ((Printf.sprintf "Variable %s is already declared in that block." name), (!nextPo, snd (snd loc_expr))));
-                    let loc_var = name::(loc_var) in
-                    (let typInit = appRec init in
+                    let typeFinal = (let typInit = appRec init in
                     match typOpt with
-                        | None          -> Smap.add name (typInit, isCst) env
+                        | None          -> typInit
                         | Some typName  -> estBF typName;
                             if not(estSousType typInit typName) then
                                 raise (Type_error ((Printf.sprintf "This expression has type %a, but was expected to be castable to %a." typeDisplay typInit typeDisplay typName), snd init))
                             else
-                                Smap.add name (typName, isCst) env
-                    )
-                          ) loc_var classesDeclarees membresClasse mContraintes methC (Ebloc (q), (!nextPo, snd (snd loc_expr)))
+                                typName
+                    ) in 
+                    checkVariance vPC mapVariance (if isCst then ModifPlus else ModifNone) typeFinal;
+                    Smap.add name (typeFinal, isCst) env
+                          ) (!nextLV) classesDeclarees membresClasse mContraintes methC (Ebloc (q), (!nextPo, snd (snd loc_expr)))
         )
    
 let varName var = 
@@ -499,12 +522,12 @@ let listeConstruct name classesDeclarees =
     let Class(_,_,_,pList,_,_) = Smap.find name classesDeclarees in
     lPAFromPL pList
 
-(* pas tout à fait à cause du grand-père *)
 let getVarOfCl name classesDeclarees membresClasse = 
     if not (Smap.mem name membresClasse) then []
     else List.filter (fun x -> not (List.mem x (listeConstruct name classesDeclarees))) (List.map (fun (n,_,_) -> n) (Smap.find name membresClasse))
 
-let rec type_class classesDeclarees membresClasse mContraintes methC classe = 
+
+let rec type_class vPC classesDeclarees membresClasse mContraintes methC classe = 
     let Class(nom_classe,inter,listePTC,pList,(typPere, exp_list),liste_decl) = classe in
     
     if Smap.mem nom_classe classesDeclarees then
@@ -515,6 +538,7 @@ let rec type_class classesDeclarees membresClasse mContraintes methC classe =
     let rvMethC = ref methC in
     let listeT = getListeParamsTypeFromClass classe in
     
+    let listeVariance = List.map fst listePTC in
     let mapVariance = List.fold_left (fun mp (modif,pt) -> Smap.add (getNamePT pt) modif mp) Smap.empty listePTC in
     
     (*step 1*)
@@ -527,6 +551,7 @@ let rec type_class classesDeclarees membresClasse mContraintes methC classe =
     (*step 2*)
     let (tpName, _, ArgsType(tpList)) = typPere in
     bienForme newClassesDeclarees newMContraintes typPere;
+    checkVariance vPC mapVariance ModifPlus typPere;
  
     (*let newClassesDeclarees = (*ajouter la classe C à Gamma *) *)
     rvCd := Smap.add nom_classe classe (!rvCd);
@@ -556,7 +581,7 @@ let rec type_class classesDeclarees membresClasse mContraintes methC classe =
     rvMembresClasse := ajouteVarConstruct nom_classe (classParams classe) (!rvMembresClasse);
 
     (*step 4*)
-    let _ = type_expr newEnv [] newClassesDeclarees membresClasse newMContraintes methC (Enew(tpName, ArgsType(tpList), exp_list),dummy_inter) in
+    let _ = type_expr mapVariance vPC newEnv [] newClassesDeclarees membresClasse newMContraintes methC (Enew(tpName, ArgsType(tpList), exp_list),dummy_inter) in
 
     (*step 5*)
     let curVDecl = ref ((lPAFromPL pList)@(getVarOfCl tpName classesDeclarees membresClasse)) in
@@ -571,7 +596,7 @@ let rec type_class classesDeclarees membresClasse mContraintes methC classe =
                 raise (Unicity_error(Printf.sprintf "Variable %s already declared in the current class %s (or its constructor, or its parents)." (varName var) nom_classe, inter));
             curVDecl := (varName var)::(!curVDecl);
 
-            let resTyp = type_expr newEnv [] newClassesDeclarees newMembresClasse newMContraintes newMethC (Ebloc([Idef(var); Iexpr(Eaccess(Lident(varName var,dummy_inter)), dummy_inter)]),dummy_inter) in
+            let resTyp = type_expr mapVariance vPC newEnv [] newClassesDeclarees newMembresClasse newMContraintes newMethC (Ebloc([Idef(var); Iexpr(Eaccess(Lident(varName var,dummy_inter)), dummy_inter)]),dummy_inter) in
             
             let nnMCl = ajouteMembre newMembresClasse nom_classe (varName var, varConst var, resTyp) in
             
@@ -600,17 +625,22 @@ let rec type_class classesDeclarees membresClasse mContraintes methC classe =
             let nnMethC = ajouteMethode nom_classe methode newMethC in
             rvMethC := ajouteMethode nom_classe methode (!rvMethC);
             
-            let s_t = (type_expr nnEnv [] nnCD newMembresClasse nnMCT nnMethC locd_expr) in
+            let s_t = (type_expr mapVariance vPC nnEnv [] nnCD newMembresClasse nnMCT nnMethC locd_expr) in
             if not (sousType nnCD nnMCT s_t typRet)
-            then raise (Type_error ((Printf.sprintf "This expression has type %a, but was expected to be castable to %a." typeDisplay s_t typeDisplay typRet), snd locd_expr))
-            else (** TODO : check override **)(newClassesDeclarees, newMembresClasse, newMContraintes, nnMethC)
+            then raise (Type_error ((Printf.sprintf "This expression has type %a, but was expected to be castable to %a." typeDisplay s_t typeDisplay typRet), snd locd_expr));
+            
+            List.iter (fun param -> checkVariance vPC mapVariance ModifMinus (snd param)) param_list;
+            checkVariance vPC mapVariance ModifPlus typRet;
+            
+            (** TODO : check override **)
+            (newClassesDeclarees, newMembresClasse, newMContraintes, nnMethC)
     in
     let _ = List.fold_left type_decl (newClassesDeclarees, membresClasse, newMContraintes, methC) liste_decl in
-    (!rvCd, !rvMembresClasse, !rvMethC)
+    (Smap.add nom_classe listeVariance vPC,!rvCd, !rvMembresClasse, !rvMethC)
 
 (*main n'a pas le droit de s'instancier elle-même. TODO *)
-let typeMain classesDeclarees membresClasse mContraintes methC classe =
-    type_class classesDeclarees membresClasse mContraintes methC (Class("Main", dummy_inter, [], [], (basicType classesDeclarees "AnyRef", []), classe))
+let typeMain   vPC classesDeclarees membresClasse mContraintes methC classe =
+    type_class vPC classesDeclarees membresClasse mContraintes methC (Class("Main", dummy_inter, [], [], (basicType classesDeclarees "AnyRef", []), classe))
 
 let makeBC nom_classe nom_pere classesDeclarees =
     Class(nom_classe, dummy_inter, [], [], (basicType classesDeclarees nom_pere, []), [])
@@ -633,10 +663,10 @@ let typeFichier f =
     let clDecl = getDefaultCl in
     let memCl = Smap.empty in
     let methC = Smap.empty in
-    let rec typeRecCl curClDecl curMemCl curMethC l = (match l with
-    | [] -> typeMain curClDecl curMemCl mContraintes curMethC (snd f)
-    | p::q -> let nCD,nMC,nMethC = type_class curClDecl curMemCl mContraintes curMethC p in typeRecCl nCD nMC nMethC q)
-    in typeRecCl clDecl memCl methC (fst f); ()
+    let rec typeRecCl vPC curClDecl curMemCl curMethC l = (match l with
+    | [] -> typeMain vPC curClDecl curMemCl mContraintes curMethC (snd f)
+    | p::q -> let vPC,nCD,nMC,nMethC = type_class vPC curClDecl curMemCl mContraintes curMethC p in typeRecCl vPC nCD nMC nMethC q)
+    in typeRecCl Smap.empty clDecl memCl methC (fst f); ()
 
 (* sigma : T -> vector<bool> vector<vector<bool>, vector2<int>, B> *)
 
