@@ -523,18 +523,18 @@ let rec type_class classesDeclarees membresClasse mContraintes methC classe =
                        let nnMCl = ajouteMembre newMembresClasse nom_classe (varName var, varConst var, resTyp) in
                        rvMembresClasse := ajouteMembre (!rvMembresClasse) nom_classe (varName var, varConst var, resTyp);
                        (newClassesDeclarees, nnMCl, newMContraintes, newMethC) (*TODO check si je le fais bien *)
-        | Dmeth(methode) -> let (do_override,ident,param_type_list,param_list,typ,locd_expr,interv) = methode in
+        | Dmeth(methode) -> let (do_override,ident,param_type_list,param_list,typRet,locd_expr,interv) = methode in
                             let nnCD,nnMCT,newMembresClasse,newMethC=extendTenTprimeStep1 newClassesDeclarees newMContraintes newMembresClasse newMethC param_type_list in
                   
                             let nnEnv = extendStep3 newEnv nnCD nnMCT param_list in (*not found ici *)
-                            let nnEnv = Smap.add "return" (typ,true) nnEnv in
+                            let nnEnv = Smap.add "return" (typRet,true) nnEnv in
                             
                             let nnMethC = ajouteMethode nom_classe methode newMethC in
                             rvMethC := ajouteMethode nom_classe methode (!rvMethC);
                             
                             let s_t = (type_expr nnEnv nnCD newMembresClasse nnMCT nnMethC locd_expr) in
-                            if not (sousType nnCD nnMCT s_t typ)
-                            then raise (Type_error ((Printf.sprintf "This expression has type %a, but was expected to be castable to %a." typeDisplay s_t typeDisplay typ), snd locd_expr))
+                            if not (sousType nnCD nnMCT s_t typRet)
+                            then raise (Type_error ((Printf.sprintf "This expression has type %a, but was expected to be castable to %a." typeDisplay s_t typeDisplay typRet), snd locd_expr))
                             else (** TODO : check override **)(newClassesDeclarees, newMembresClasse, newMContraintes, nnMethC)
     in
     let _ = List.fold_left type_decl (newClassesDeclarees, membresClasse, newMContraintes, methC) liste_decl in

@@ -4,7 +4,8 @@ all:
 	ocamllex lexer.mll
 	rm parser.mli
 	ocamlopt -o pscala parser.ml lexer.ml typage.ml main.ml
-	
+
+test:
 	for f in tests/typing/good/*.scala; do ./pscala $$f; done
 	for f in tests/exec/*.scala; do ./pscala $$f; done
 
