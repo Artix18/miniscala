@@ -162,31 +162,30 @@ let lvname lv = match lv with
 
 let compose sigma sigmaPrime = (*sigma rond sigmaPrime*)
     let fus k x y = match x,y with
-        | _, Some b -> Some b
-        | Some a, None -> Some a
+        | _, Some _ -> y
+        | _         -> x
     in
     Smap.merge fus sigma sigmaPrime
 
 let checkMeth nom_classe meth methC =
     let (lv, ArgsType(args_type),liste_expr) = meth in
     let Laccess (exp, mname, inter) = lv in
-    if not (Smap.mem nom_classe methC) then raise (Unbound_error ("Class " ^ nom_classe ^ " has no method, thus no method named " ^ mname ^ ".", (fst(snd exp), snd inter)))
-    else(
+    if not (Smap.mem nom_classe methC)
+        then raise (Unbound_error ("Class " ^ nom_classe ^ " has no method, thus no method named " ^ mname ^ ".", (fst(snd exp), snd inter)));
+    
     let p x = let (_,name,_,_,_,_,_)=x in name=mname
     in
-    if not (List.exists p (Smap.find nom_classe methC)) then raise (Unbound_error  ("Class " ^ nom_classe ^ " has no method named " ^ mname ^ ".", (fst(snd exp), snd inter)))
-    else (
-    let methode : methode = List.find p (Smap.find nom_classe methC) in
-    let ((_,_,ptl,pl,rv,_,_):methode) = methode in
-    if List.length ptl <> List.length args_type then raise (Param_error (Printf.sprintf "Method %s.%s expects %d type parameters, but was given %d." nom_classe mname (List.length ptl) (List.length args_type), (fst(snd exp), snd inter)))
-    else(
-    if List.length pl <> List.length liste_expr then raise (Param_error (Printf.sprintf "Method %s.%s expects %d parameters, but was given %d." nom_classe mname (List.length pl) (List.length liste_expr), (fst(snd exp), snd inter)))
-    else (
-        (ptl, pl, rv)
-    )
-    )
-    )
-    )
+    if not (List.exists p (Smap.find nom_classe methC))
+        then raise (Unbound_error ("Class " ^ nom_classe ^ " has no method named " ^ mname ^ ".", (fst(snd exp), snd inter)));
+    let methode = List.find p (Smap.find nom_classe methC) in
+    let (_,_,ptl,pl,rv,_,_) = methode in
+    if List.length ptl <> List.length args_type
+        then raise (Param_error (Printf.sprintf "Method %s.%s expects %d type parameters, but was given %d." nom_classe mname (List.length ptl) (List.length args_type), (fst(snd exp), snd inter)));
+    
+    if List.length pl <> List.length liste_expr
+        then raise (Param_error (Printf.sprintf "Method %s.%s expects %d parameters, but was given %d." nom_classe mname (List.length pl) (List.length liste_expr), (fst(snd exp), snd inter)));
+    
+    (ptl, pl, rv)
 
 let getIdentLv lv = match lv with   | Lident(ident,_)|Laccess(_,ident,_)->ident
 
