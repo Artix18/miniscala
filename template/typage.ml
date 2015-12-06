@@ -214,8 +214,8 @@ let rec type_expr env classesDeclarees membresClasse mContraintes methC loc_expr
             let typeDeEx = appRec ex in 
             let (nom_classe,b,ArgsType(listeTypePar)) = typeDeEx in
             if possedeMembre nom_classe x membresClasse then (
-            let typeAbsX = fst (getTypeAbstrait nom_classe x membresClasse) in (*nom_classe.x*)
-            remplaceType typeAbsX (construitSigma nom_classe listeTypePar classesDeclarees)
+                let typeAbsX = fst (getTypeAbstrait nom_classe x membresClasse) in (*nom_classe.x*)
+                remplaceType typeAbsX (construitSigma nom_classe listeTypePar classesDeclarees)
             )
             else raise (Unbound_error (Printf.sprintf "Class %s has no field named %s." nom_classe x, inter))
         )
@@ -228,9 +228,12 @@ let rec type_expr env classesDeclarees membresClasse mContraintes methC loc_expr
         | Laccess(ex, x, inter) ->
             let typeDeEx = appRec ex in 
             let (nom_classe,b,ArgsType(listeTypePar)) = typeDeEx in
-            let (typeAbsX, isConst) = getTypeAbstrait nom_classe x membresClasse in
-            if isConst then raise (Type_error (Printf.sprintf "Field %s.%s is constant." nom_classe x, inter))
-            else remplaceType typeAbsX (construitSigma nom_classe listeTypePar classesDeclarees)
+            if possedeMembre nom_classe x membresClasse then (
+                let (typeAbsX, isConst) = getTypeAbstrait nom_classe x membresClasse in
+                if isConst then raise (Type_error (Printf.sprintf "Field %s.%s is constant." nom_classe x, inter))
+                else remplaceType typeAbsX (construitSigma nom_classe listeTypePar classesDeclarees)
+            )
+            else raise (Unbound_error (Printf.sprintf "Class %s has no field named %s." nom_classe x, inter))
         ) in 
         (* let t1 = appRec (Eaccess(lv), (fst (snd loc_expr), pos)) in *)
         let t2 = appRec e in

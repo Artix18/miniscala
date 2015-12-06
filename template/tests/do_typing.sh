@@ -30,11 +30,11 @@ for f in typing/bad/*.scala; do
     ../pscala $f > out 2>&1;
     if grep -q "Typage reussi" out; then
     	echo "Failed: The compilation should have resulted in an error."   
-    #else if grep -q "Anomaly" out; then
-	#    echo "Failed: Anomaly";
+    else if grep -q "Anomaly" out; then
+	    echo "Failed: Anomaly";
     else
         score=`expr $score + 1`
-    #fi
+    fi
     fi
 done
 
