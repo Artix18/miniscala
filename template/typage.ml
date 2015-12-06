@@ -509,11 +509,12 @@ let rec type_class classesDeclarees membresClasse mContraintes methC classe =
                             let nnCD,nnMCT,newMembresClasse,newMethC=extendTenTprimeStep1 newClassesDeclarees newMContraintes newMembresClasse newMethC param_type_list in
                   
                             let nnEnv = extendStep3 newEnv nnCD nnMCT param_list in (*not found ici *)
+                            bienForme nnCD nnMCT typRet;
                             let nnEnv = Smap.add "return" (typRet,true) nnEnv in
                             
                             let nnMethC = ajouteMethode nom_classe methode newMethC in
                             rvMethC := ajouteMethode nom_classe methode (!rvMethC);
-                            
+
                             let s_t = (type_expr nnEnv nnCD newMembresClasse nnMCT nnMethC locd_expr) in
                             if not (sousType nnCD nnMCT s_t typRet)
                             then raise (Type_error ((Printf.sprintf "This expression has type %a, but was expected to be castable to %a." typeDisplay s_t typeDisplay typRet), snd locd_expr))
