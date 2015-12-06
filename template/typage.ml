@@ -442,6 +442,9 @@ let isIllegalExtend name =
     |"Any"|"AnyVal"|"Unit"|"Int"|"Boolean"|"String"|"Null"|"Nothing" -> true
     |_ -> false
 
+let doublon liste = 
+    List.exists (fun x -> List.length (List.filter (fun p -> p=x) liste) > 1) liste
+
 let extendTenTprimeStep1 classesDeclarees mContraintes membresClasse methC listeT =
     let realBasicType = basicType classesDeclarees in
     let checkTi (newCD, newConstraints, newMembresClasse, newMethC) x =
@@ -483,7 +486,7 @@ let ajouteVarConstruct nom_classe parList membresClasse =
         Smap.add nom_classe lToAdd membresClasse
 
 let rec type_class classesDeclarees membresClasse mContraintes methC classe = 
-    let Class(nom_classe,inter,_,_,(typPere, exp_list),liste_decl) = classe in
+    let Class(nom_classe,inter,_,pList,(typPere, exp_list),liste_decl) = classe in
     
     if Smap.mem nom_classe classesDeclarees then
         raise (Unicity_error(Printf.sprintf "Class %s is already declared." nom_classe, inter));
@@ -494,6 +497,10 @@ let rec type_class classesDeclarees membresClasse mContraintes methC classe =
     let listeT = getListeParamsTypeFromClass classe in
 
     (*step 1*)
+    
+    if doublon listeT then
+        raise (Unicity_error(Printf.sprintf "Types parameters should have different names in class %s declaration." nom_classe, inter));
+    
     let newClassesDeclarees, newMContraintes, membresClasse, methC = extendTenTprimeStep1 classesDeclarees mContraintes membresClasse methC listeT in
     
     (*step 2*)
@@ -521,6 +528,8 @@ let rec type_class classesDeclarees membresClasse mContraintes methC classe =
 
     (* step 3*)
     let newEnv = (Smap.add "this" ((className classe, dummy_inter, ArgsType(listeTypeFromPTs listeT)), true) Smap.empty) in
+    if doublon pList then
+        raise (Unicity_error(Printf.sprintf "Parameters should have different names in class %s declaration." nom_classe, inter));
     
     let membresClasse = ajouteVarConstruct nom_classe (classParams classe) membresClasse in
     rvMembresClasse := ajouteVarConstruct nom_classe (classParams classe) (!rvMembresClasse);
@@ -537,9 +546,15 @@ let rec type_class classesDeclarees membresClasse mContraintes methC classe =
                        rvMembresClasse := ajouteMembre (!rvMembresClasse) nom_classe (varName var, varConst var, resTyp);
                        (newClassesDeclarees, nnMCl, newMContraintes, newMethC) (*TODO check si je le fais bien *)
         | Dmeth(methode) -> let (do_override,ident,param_type_list,param_list,typRet,locd_expr,interv) = methode in
+        
+                            if doublon param_type_list then
+                                raise (Unicity_error(Printf.sprintf "Types parameters should have different names in method %s (from class %s) declaration." ident nom_classe, interv));
                             let nnCD,nnMCT,newMembresClasse,newMethC=extendTenTprimeStep1 newClassesDeclarees newMContraintes newMembresClasse newMethC param_type_list in
                   
+                            if doublon param_list then
+                                raise (Unicity_error(Printf.sprintf "Parameters should have different names in class %s declaration." nom_classe, interv));
                             let nnEnv = extendStep3 newEnv nnCD nnMCT param_list in (*not found ici *)
+                            
                             bienForme nnCD nnMCT typRet;
                             let nnEnv = Smap.add "return" (typRet,true) nnEnv in
                             
