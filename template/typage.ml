@@ -208,10 +208,10 @@ let checkMeth nom_classe meth methC =
 let getIdentLv lv = match lv with   | Lident(ident,_)|Laccess(_,ident,_)->ident
 
 (* j'ai mis nawak pour les loc_expr et inter, à toi de voir. Mais ça compile *)
-let rec type_expr env classesDeclarees membresClasse mContraintes methC loc_expr =
+let rec type_expr env loc_var classesDeclarees membresClasse mContraintes methC loc_expr =
     let estSousType = sousType    classesDeclarees mContraintes in
     let estEqTypes  = eqTypes     classesDeclarees mContraintes in
-    let appRec   = type_expr env  classesDeclarees membresClasse mContraintes methC in 
+    let appRec   = type_expr env  loc_var classesDeclarees membresClasse mContraintes methC in 
     let estBF    = bienForme      classesDeclarees mContraintes in
     let realBasicType = basicType classesDeclarees in
     match fst loc_expr with
@@ -376,6 +376,9 @@ let rec type_expr env classesDeclarees membresClasse mContraintes methC loc_expr
                 type_expr (match instr with
                 | Iexpr (e, (d,finVar))                      -> nextPo := finVar; let _ = appRec (e,(d,finVar)) in env
                 | Idef  (isCst,name,typOpt,init,(_, finVar)) -> nextPo := finVar;
+                    if List.mem name loc_var then
+                        raise (Unicity_error ((Printf.sprintf "Variable %s is already declared in that block." name), (!nextPo, snd (snd loc_expr))));
+                    let loc_var = name::(loc_var) in
                     (let typInit = appRec init in
                     match typOpt with
                         | None          -> Smap.add name (typInit, isCst) env
@@ -385,7 +388,7 @@ let rec type_expr env classesDeclarees membresClasse mContraintes methC loc_expr
                             else
                                 Smap.add name (typName, isCst) env
                     )
-                          ) classesDeclarees membresClasse mContraintes methC (Ebloc (q), (!nextPo, snd (snd loc_expr)))
+                          ) loc_var classesDeclarees membresClasse mContraintes methC (Ebloc (q), (!nextPo, snd (snd loc_expr)))
         )
    
 let varName var = 
@@ -495,6 +498,7 @@ let listeConstruct name classesDeclarees =
     let Class(_,_,_,pList,_,_) = Smap.find name classesDeclarees in
     lPAFromPL pList
 
+(* pas tout à fait à cause du grand-père *)
 let getVarOfCl name classesDeclarees membresClasse = 
     if not (Smap.mem name membresClasse) then []
     else List.filter (fun x -> not (List.mem x (listeConstruct name classesDeclarees))) (List.map (fun (n,_,_) -> n) (Smap.find name membresClasse))
@@ -551,7 +555,7 @@ let rec type_class classesDeclarees membresClasse mContraintes methC classe =
     rvMembresClasse := ajouteVarConstruct nom_classe (classParams classe) (!rvMembresClasse);
 
     (*step 4*)
-    let _ = type_expr newEnv newClassesDeclarees membresClasse newMContraintes methC (Enew(tpName, ArgsType(tpList), exp_list),dummy_inter) in
+    let _ = type_expr newEnv [] newClassesDeclarees membresClasse newMContraintes methC (Enew(tpName, ArgsType(tpList), exp_list),dummy_inter) in
 
     (*step 5*)
     let curVDecl = ref ((lPAFromPL pList)@(getVarOfCl tpName classesDeclarees membresClasse)) in
@@ -566,7 +570,7 @@ let rec type_class classesDeclarees membresClasse mContraintes methC classe =
                 raise (Unicity_error(Printf.sprintf "Variable %s already declared in the current class %s (or its constructor, or its parents)." (varName var) nom_classe, inter));
             curVDecl := (varName var)::(!curVDecl);
 
-            let resTyp = type_expr newEnv newClassesDeclarees newMembresClasse newMContraintes newMethC (Ebloc([Idef(var); Iexpr(Eaccess(Lident(varName var,dummy_inter)), dummy_inter)]),dummy_inter) in
+            let resTyp = type_expr newEnv [] newClassesDeclarees newMembresClasse newMContraintes newMethC (Ebloc([Idef(var); Iexpr(Eaccess(Lident(varName var,dummy_inter)), dummy_inter)]),dummy_inter) in
             
             let nnMCl = ajouteMembre newMembresClasse nom_classe (varName var, varConst var, resTyp) in
             
@@ -595,7 +599,7 @@ let rec type_class classesDeclarees membresClasse mContraintes methC classe =
             let nnMethC = ajouteMethode nom_classe methode newMethC in
             rvMethC := ajouteMethode nom_classe methode (!rvMethC);
             
-            let s_t = (type_expr nnEnv nnCD newMembresClasse nnMCT nnMethC locd_expr) in
+            let s_t = (type_expr nnEnv [] nnCD newMembresClasse nnMCT nnMethC locd_expr) in
             if not (sousType nnCD nnMCT s_t typRet)
             then raise (Type_error ((Printf.sprintf "This expression has type %a, but was expected to be castable to %a." typeDisplay s_t typeDisplay typRet), snd locd_expr))
             else (** TODO : check override **)(newClassesDeclarees, newMembresClasse, newMContraintes, nnMethC)
