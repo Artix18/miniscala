@@ -431,15 +431,18 @@ let ajouteMethClasse nom_pere nom_classe mMeth sigma =
     if Smap.mem nom_pere mMeth then Smap.add nom_classe (List.map appli_sigma (Smap.find nom_pere mMeth)) mMeth
     else mMeth
 
+let retire map nom = 
+    Smap.filter (fun key _ -> key <> nom) map
+
 let extendTenTprimeStep1 classesDeclarees mContraintes membresClasse methC listeT =
     let realBasicType = basicType classesDeclarees in
     let checkTi (newCD, newConstraints, newMembresClasse, newMethC) x =
         match x with
-        | PTsimple(nom)        -> (Smap.add nom (Class(nom, [], [], (realBasicType "AnyRef", []), [])) newCD, newConstraints, newMembresClasse, newMethC)
+        | PTsimple(nom)        -> (Smap.add nom (Class(nom, [], [], (realBasicType "Any", []), [])) newCD, retire newConstraints nom, retire newMembresClasse nom, retire newMethC nom)
         | PTbigger(nom, typ)   -> bienForme newCD newConstraints typ;
-                                  let nnCD = Smap.add nom (Class(nom, [], [], (realBasicType "AnyRef", []), [])) newCD in
+                                  let nnCD = Smap.add nom (Class(nom, [], [], (realBasicType "Any", []), [])) newCD in
                                   let nnCT = Smap.add nom ([typ]) newConstraints in
-                                  (nnCD, nnCT, newMembresClasse, newMethC)
+                                  (nnCD, nnCT, retire newMembresClasse nom, retire newMethC nom)
         | PTsmaller(nom, typ)  -> bienForme newCD newConstraints typ;
                                   let nnCD = Smap.add nom (Class(nom, [], [], (typ, []) , [])) newCD in
                                   let (tpName, _, ArgsType(tpList)) = typ in
