@@ -211,7 +211,8 @@ let getIdentLv lv = match lv with   | Lident(ident,_)|Laccess(_,ident,_)->ident
 let rec type_expr env loc_var classesDeclarees membresClasse mContraintes methC loc_expr =
     let estSousType = sousType    classesDeclarees mContraintes in
     let estEqTypes  = eqTypes     classesDeclarees mContraintes in
-    let appRec   = type_expr env  loc_var classesDeclarees membresClasse mContraintes methC in 
+    let appRec   = type_expr env  [] classesDeclarees membresClasse mContraintes methC in 
+    let appRec2  = type_expr env  loc_var classesDeclarees membresClasse mContraintes methC in 
     let estBF    = bienForme      classesDeclarees mContraintes in
     let realBasicType = basicType classesDeclarees in
     match fst loc_expr with
@@ -374,7 +375,7 @@ let rec type_expr env loc_var classesDeclarees membresClasse mContraintes methC 
             | [Iexpr e] -> (appRec e)
             | instr::q  -> let nextPo = ref (snd (snd loc_expr)) in
                 type_expr (match instr with
-                | Iexpr (e, (d,finVar))                      -> nextPo := finVar; let _ = appRec (e,(d,finVar)) in env
+                | Iexpr (e, (d,finVar))                      -> nextPo := finVar; let _ = appRec2 (e,(d,finVar)) in env
                 | Idef  (isCst,name,typOpt,init,(_, finVar)) -> nextPo := finVar;
                     if List.mem name loc_var then
                         raise (Unicity_error ((Printf.sprintf "Variable %s is already declared in that block." name), (!nextPo, snd (snd loc_expr))));
