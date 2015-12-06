@@ -469,6 +469,9 @@ let extendTenTprimeStep1 classesDeclarees mContraintes membresClasse methC liste
 let extendStep3 env nCD mCT listeParams =
     List.fold_left (fun nEnv (nom, typ) -> bienForme nCD mCT typ; Smap.add nom (typ, true) nEnv) env listeParams
 
+let lPAFromPL pl = 
+    List.map fst pl
+
 let ajouteVarConstruct nom_classe parList membresClasse = 
     let transforme pl =
         List.map (fun (a,b) -> (a,true,b)) pl
@@ -498,7 +501,7 @@ let rec type_class classesDeclarees membresClasse mContraintes methC classe =
 
     (*step 1*)
     
-    if doublon listeT then
+    if doublon (lPAFromPT listeT) then
         raise (Unicity_error(Printf.sprintf "Types parameters should have different names in class %s declaration." nom_classe, inter));
     
     let newClassesDeclarees, newMContraintes, membresClasse, methC = extendTenTprimeStep1 classesDeclarees mContraintes membresClasse methC listeT in
@@ -528,7 +531,7 @@ let rec type_class classesDeclarees membresClasse mContraintes methC classe =
 
     (* step 3*)
     let newEnv = (Smap.add "this" ((className classe, dummy_inter, ArgsType(listeTypeFromPTs listeT)), true) Smap.empty) in
-    if doublon pList then
+    if doublon (lPAFromPL pList) then
         raise (Unicity_error(Printf.sprintf "Parameters should have different names in class %s declaration." nom_classe, inter));
     
     let membresClasse = ajouteVarConstruct nom_classe (classParams classe) membresClasse in
@@ -547,11 +550,11 @@ let rec type_class classesDeclarees membresClasse mContraintes methC classe =
                        (newClassesDeclarees, nnMCl, newMContraintes, newMethC) (*TODO check si je le fais bien *)
         | Dmeth(methode) -> let (do_override,ident,param_type_list,param_list,typRet,locd_expr,interv) = methode in
         
-                            if doublon param_type_list then
+                            if doublon (lPAFromPT param_type_list) then
                                 raise (Unicity_error(Printf.sprintf "Types parameters should have different names in method %s (from class %s) declaration." ident nom_classe, interv));
                             let nnCD,nnMCT,newMembresClasse,newMethC=extendTenTprimeStep1 newClassesDeclarees newMContraintes newMembresClasse newMethC param_type_list in
                   
-                            if doublon param_list then
+                            if doublon (lPAFromPL param_list) then
                                 raise (Unicity_error(Printf.sprintf "Parameters should have different names in class %s declaration." nom_classe, interv));
                             let nnEnv = extendStep3 newEnv nnCD nnMCT param_list in (*not found ici *)
                             
