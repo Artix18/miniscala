@@ -447,23 +447,25 @@ let doublon liste =
 
 let extendTenTprimeStep1 classesDeclarees mContraintes membresClasse methC listeT =
     let realBasicType = basicType classesDeclarees in
-    let checkTi (newCD, newConstraints, newMembresClasse, newMethC) x =
-        match x with
-        | PTsimple(nom)        -> (Smap.add nom (Class(nom, dummy_inter, [], [], (realBasicType "Any", []), [])) newCD, retire newConstraints nom, retire newMembresClasse nom, retire newMethC nom)
-        | PTbigger(nom, typ)   -> bienForme newCD newConstraints typ;
-                                  let nnCD = Smap.add nom (Class(nom, dummy_inter, [], [], (realBasicType "Any", []), [])) newCD in
-                                  let nnCT = Smap.add nom ([typ]) newConstraints in
-                                  (nnCD, nnCT, retire newMembresClasse nom, retire newMethC nom)
-        | PTsmaller(nom, typ)  -> bienForme newCD newConstraints typ;
-                                  let nnCD = Smap.add nom (Class(nom, dummy_inter, [], [], (typ, []) , [])) newCD in
-                                  let (tpName, _, ArgsType(tpList)) = typ in
-                                  
-                                  let ptitSigma = construitSigma tpName tpList newCD in
-                                  
-                                  let nnMC = ajouteMemClasse tpName nom newMembresClasse ptitSigma in
-                                  let nnMethC = ajouteMethClasse tpName nom newMethC ptitSigma in
-                                  (nnCD, retire newConstraints nom, nnMC, nnMethC)
-       in
+    let checkTi (newCD, newConstraints, newMembresClasse, newMethC) x = match x with
+        | PTsimple(nom)        ->
+            (Smap.add nom (Class(nom, dummy_inter, [], [], (realBasicType "Any", []), [])) newCD, retire newConstraints nom, retire newMembresClasse nom, retire newMethC nom)
+        | PTbigger(nom, typ)   ->
+            bienForme newCD newConstraints typ;
+            let nnCD = Smap.add nom (Class(nom, dummy_inter, [], [], (realBasicType "Any", []), [])) newCD in
+            let nnCT = Smap.add nom ([typ]) newConstraints in
+            (nnCD, nnCT, retire newMembresClasse nom, retire newMethC nom)
+        | PTsmaller(nom, typ)  ->
+            bienForme newCD newConstraints typ;
+            let nnCD = Smap.add nom (Class(nom, dummy_inter, [], [], (typ, []) , [])) newCD in
+            let (tpName, _, ArgsType(tpList)) = typ in
+
+            let ptitSigma = construitSigma tpName tpList newCD in
+
+            let nnMC = ajouteMemClasse tpName nom newMembresClasse ptitSigma in
+            let nnMethC = ajouteMethClasse tpName nom newMethC ptitSigma in
+            (nnCD, retire newConstraints nom, nnMC, nnMethC)
+    in
     List.fold_left checkTi (classesDeclarees, mContraintes, membresClasse, methC) listeT
 
 let extendStep3 env nCD mCT listeParams =
@@ -489,7 +491,7 @@ let ajouteVarConstruct nom_classe parList membresClasse =
         Smap.add nom_classe lToAdd membresClasse
 
 let rec type_class classesDeclarees membresClasse mContraintes methC classe = 
-    let Class(nom_classe,inter,_,pList,(typPere, exp_list),liste_decl) = classe in
+    let Class(nom_classe,inter,listePTC,pList,(typPere, exp_list),liste_decl) = classe in
     
     if Smap.mem nom_classe classesDeclarees then
         raise (Unicity_error(Printf.sprintf "Class %s is already declared." nom_classe, inter));
@@ -498,7 +500,9 @@ let rec type_class classesDeclarees membresClasse mContraintes methC classe =
     let rvMembresClasse = ref membresClasse in
     let rvMethC = ref methC in
     let listeT = getListeParamsTypeFromClass classe in
-
+    
+    let mapVariance = List.fold_left (fun mp (modif,pt) -> Smap.add (getNamePT pt) modif mp) Smap.empty listePTC in
+    
     (*step 1*)
     
     if doublon (lPAFromPT listeT) then
@@ -544,30 +548,32 @@ let rec type_class classesDeclarees membresClasse mContraintes methC classe =
     let type_decl megaEnv decl = 
         let (newClassesDeclarees, newMembresClasse, newMContraintes, newMethC) = megaEnv in
         match decl with
-        | Dvar(var) -> let resTyp = type_expr newEnv newClassesDeclarees newMembresClasse newMContraintes newMethC (Ebloc([Idef(var); Iexpr(Eaccess(Lident(varName var,dummy_inter)), dummy_inter)]),dummy_inter) in
-                       let nnMCl = ajouteMembre newMembresClasse nom_classe (varName var, varConst var, resTyp) in
-                       rvMembresClasse := ajouteMembre (!rvMembresClasse) nom_classe (varName var, varConst var, resTyp);
-                       (newClassesDeclarees, nnMCl, newMContraintes, newMethC) (*TODO check si je le fais bien *)
-        | Dmeth(methode) -> let (do_override,ident,param_type_list,param_list,typRet,locd_expr,interv) = methode in
+        | Dvar(var) ->
+            let resTyp = type_expr newEnv newClassesDeclarees newMembresClasse newMContraintes newMethC (Ebloc([Idef(var); Iexpr(Eaccess(Lident(varName var,dummy_inter)), dummy_inter)]),dummy_inter) in
+            let nnMCl = ajouteMembre newMembresClasse nom_classe (varName var, varConst var, resTyp) in
+            rvMembresClasse := ajouteMembre (!rvMembresClasse) nom_classe (varName var, varConst var, resTyp);
+            (newClassesDeclarees, nnMCl, newMContraintes, newMethC) (*TODO check si je le fais bien *)
+        | Dmeth(methode) ->
+            let (do_override,ident,param_type_list,param_list,typRet,locd_expr,interv) = methode in
         
-                            if doublon (lPAFromPT param_type_list) then
-                                raise (Unicity_error(Printf.sprintf "Types parameters should have different names in method %s (from class %s) declaration." ident nom_classe, interv));
-                            let nnCD,nnMCT,newMembresClasse,newMethC=extendTenTprimeStep1 newClassesDeclarees newMContraintes newMembresClasse newMethC param_type_list in
-                  
-                            if doublon (lPAFromPL param_list) then
-                                raise (Unicity_error(Printf.sprintf "Parameters should have different names in class %s declaration." nom_classe, interv));
-                            let nnEnv = extendStep3 newEnv nnCD nnMCT param_list in (*not found ici *)
-                            
-                            bienForme nnCD nnMCT typRet;
-                            let nnEnv = Smap.add "return" (typRet,true) nnEnv in
-                            
-                            let nnMethC = ajouteMethode nom_classe methode newMethC in
-                            rvMethC := ajouteMethode nom_classe methode (!rvMethC);
-                            
-                            let s_t = (type_expr nnEnv nnCD newMembresClasse nnMCT nnMethC locd_expr) in
-                            if not (sousType nnCD nnMCT s_t typRet)
-                            then raise (Type_error ((Printf.sprintf "This expression has type %a, but was expected to be castable to %a." typeDisplay s_t typeDisplay typRet), snd locd_expr))
-                            else (** TODO : check override **)(newClassesDeclarees, newMembresClasse, newMContraintes, nnMethC)
+            if doublon (lPAFromPT param_type_list) then
+                raise (Unicity_error(Printf.sprintf "Types parameters should have different names in method %s (from class %s) declaration." ident nom_classe, interv));
+            let nnCD,nnMCT,newMembresClasse,newMethC=extendTenTprimeStep1 newClassesDeclarees newMContraintes newMembresClasse newMethC param_type_list in
+  
+            if doublon (lPAFromPL param_list) then
+                raise (Unicity_error(Printf.sprintf "Parameters should have different names in class %s declaration." nom_classe, interv));
+            let nnEnv = extendStep3 newEnv nnCD nnMCT param_list in (*not found ici *)
+            
+            bienForme nnCD nnMCT typRet;
+            let nnEnv = Smap.add "return" (typRet,true) nnEnv in
+            
+            let nnMethC = ajouteMethode nom_classe methode newMethC in
+            rvMethC := ajouteMethode nom_classe methode (!rvMethC);
+            
+            let s_t = (type_expr nnEnv nnCD newMembresClasse nnMCT nnMethC locd_expr) in
+            if not (sousType nnCD nnMCT s_t typRet)
+            then raise (Type_error ((Printf.sprintf "This expression has type %a, but was expected to be castable to %a." typeDisplay s_t typeDisplay typRet), snd locd_expr))
+            else (** TODO : check override **)(newClassesDeclarees, newMembresClasse, newMContraintes, nnMethC)
     in
     let _ = List.fold_left type_decl (newClassesDeclarees, membresClasse, newMContraintes, methC) liste_decl in
     (!rvCd, !rvMembresClasse, !rvMethC)
