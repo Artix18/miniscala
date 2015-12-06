@@ -13,6 +13,7 @@ exception Param_error of string * interv
 exception Unbound_error of string * interv
 exception Type_error of string * interv
 exception Return_error of string * interv
+exception Unicity_error of string * interv
 
 exception Sigma_error of string
 
@@ -26,8 +27,6 @@ let rec typeDisplay () ((nom_classe,_,ArgsType li) : typ) =
     in match li with
     | [] -> Printf.sprintf "%s" nom_classe
     | _  -> Printf.sprintf "%s[%a]" nom_classe listDisplay li
-
-
 
 (* env = (typ, bool) map[nom_variable] : le booleen est "isConst" *) 
 (* membresClasse = (ident*bool*typ) map[nom_classe] contient une liste de ident*bool*type, ie "x", estConstant et type de classe.x *)
@@ -479,6 +478,11 @@ let ajouteVarConstruct nom_classe parList membresClasse =
         Smap.add nom_classe lToAdd membresClasse
 
 let rec type_class classesDeclarees membresClasse mContraintes methC classe = 
+    let Class(nom_classe,_,_,(typPere, exp_list),liste_decl) = classe in
+    
+    if Smap.mem nom_classe classesDeclarees then
+        raise (Unicity_error(Printf.sprintf "Class %s is already declared." nom_classe, dummy_inter));
+
     let rvCd = ref classesDeclarees in
     let rvMembresClasse = ref membresClasse in
     let rvMethC = ref methC in
@@ -488,7 +492,6 @@ let rec type_class classesDeclarees membresClasse mContraintes methC classe =
     let newClassesDeclarees, newMContraintes, membresClasse, methC = extendTenTprimeStep1 classesDeclarees mContraintes membresClasse methC listeT in
     
     (*step 2*)
-    let Class(nom_classe,_,_,(typPere, exp_list),liste_decl) = classe in
     let (tpName, _, ArgsType(tpList)) = typPere in
     bienForme newClassesDeclarees newMContraintes typPere;
  
