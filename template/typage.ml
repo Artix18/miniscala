@@ -251,16 +251,29 @@ let rec type_expr env classesDeclarees membresClasse mContraintes methC loc_expr
     | Ebinop(binop, e1, e2, pos) ->
         let t1 = appRec e1 in
         let t2 = appRec e2 in
-        let tb = (realBasicType "Boolean") in
+        let tBool = (realBasicType "Boolean") in
+        let tInt = (realBasicType "Int") in
         (match binop with
-        | Beqphy|Bneqphy when estSousType t1 (realBasicType "AnyRef")
-                           && estSousType t2 (realBasicType "AnyRef") -> tb
-        | Beq|Bneq|Blt|Ble|Bgt|Bge when estEqTypes t1 (realBasicType "Int")
-                                     && estEqTypes t1 t2 -> tb
-        | Badd|Bsub|Bmul|Bdiv|Bmod when estEqTypes t1 (realBasicType "Int")
-                                     && estEqTypes t1 t2 -> realBasicType "Int"
-        | Band|Bor when estEqTypes t1 tb && estEqTypes t2 tb -> tb
-        | _ -> failwith "operation binaire invalide. Flemme."
+        | Beqphy|Bneqphy ->
+            if estSousType t1 (realBasicType "AnyRef")
+            && estSousType t2 (realBasicType "AnyRef")
+            then tBool
+            else raise (Type_error (Printf.sprintf "These expressions have types %a and %a, but were expected to be castable to AnyRef." typeDisplay t1 typeDisplay t2, (fst(snd e1),snd(snd e2))))
+        | Beq|Bneq|Blt|Ble|Bgt|Bge ->
+            if estEqTypes t1 tInt
+            && estEqTypes t2 tInt
+            then tBool
+            else raise (Type_error (Printf.sprintf "These expressions have types %a and %a, but were expected to be Int." typeDisplay t1 typeDisplay t2, (fst(snd e1),snd(snd e2))))
+        | Badd|Bsub|Bmul|Bdiv|Bmod ->
+            if estEqTypes t1 tInt
+            && estEqTypes t2 tInt
+            then tInt
+            else raise (Type_error (Printf.sprintf "These expressions have types %a and %a, but were expected to be Int." typeDisplay t1 typeDisplay t2, (fst(snd e1),snd(snd e2))))
+        | Band|Bor ->
+            if estEqTypes t1 tBool
+            && estEqTypes t2 tBool
+            then tBool
+            else raise (Type_error (Printf.sprintf "These expressions have types %a and %a, but were expected to be Bool." typeDisplay t1 typeDisplay t2, (fst(snd e1),snd(snd e2))))
         )
     | Eprint (exp) ->
         let t = appRec exp in
