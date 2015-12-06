@@ -13,6 +13,8 @@ exception Param_error of string * interv
 exception Unbound_error of string * interv
 exception Type_error of string * interv
 
+exception Sigma_error of string
+
 let dummy_inter = (Lexing.dummy_pos, Lexing.dummy_pos)
 
 let rec typeDisplay () ((nom_classe,_,ArgsType li) : typ) =
@@ -164,10 +166,10 @@ let sigmaBienForme classesDeclarees mContraintes listeParamsType mSigma =
         match x with
         | PTbigger(nom_classe, typ)  -> let t_contr = (remplaceType typ mSigma) in
             if not (estSousType t_contr tr)
-            then raise (Type_error (Printf.sprintf "Parameter %s was set to %a, but a superclass of %a was expected." nom_classe typeDisplay tr typeDisplay t_contr, dummy_inter))
+            then raise (Sigma_error (Printf.sprintf "type parameter %s was set to %a, but a superclass of %a was expected." nom_classe typeDisplay tr typeDisplay t_contr))
         | PTsmaller(nom_classe, typ) -> let t_contr = (remplaceType typ mSigma) in
             if not (estSousType tr t_contr)
-            then raise (Type_error (Printf.sprintf "Parameter %s was set to %a, but a subclass of %a was expected." nom_classe typeDisplay tr typeDisplay t_contr, dummy_inter))
+            then raise (Sigma_error (Printf.sprintf "type parameter %s was set to %a, but a subclass of %a was expected." nom_classe typeDisplay tr typeDisplay t_contr))
         | _ -> ()
     in
     List.iter p listeParamsType
@@ -180,7 +182,9 @@ let rec bienForme classesDeclarees mContraintes ((nom,inter,ArgsType(params)) : 
     List.iter (fun x -> bienForme classesDeclarees mContraintes x; ()) params;
     let mSigma = construitSigma nom params classesDeclarees in
     let (classe:clas) = getClassFromType (nom,inter,ArgsType(params)) classesDeclarees in
+    try
     sigmaBienForme classesDeclarees mContraintes (getListeParamsTypeFromClass classe) mSigma
+    with Sigma_error s_err -> raise (Type_error (Printf.sprintf "For class %s, %s" nom s_err, inter))
     
 
 let lvname lv = match lv with
@@ -335,7 +339,7 @@ let rec type_expr env classesDeclarees membresClasse mContraintes methC loc_expr
         let tClasse = appRec (Eaccess(lv), snd loc_expr) in ()
         with | _ -> print_string (getIdentLv lv); failwith "ici");*)
         
-        let Laccess(lvexp, _,_) = lv in
+        let Laccess(lvexp, nom_meth,inter) = lv in
         
         let tClasse = appRec lvexp in
 
@@ -345,7 +349,10 @@ let rec type_expr env classesDeclarees membresClasse mContraintes methC loc_expr
         let sigma = construitSigma nom_classe (parConcret tClasse) classesDeclarees in
         let sigmaPrime = construitMapAssociative (lPAFromPT tAbs) args_type in
         let compo = compose sigma sigmaPrime in
+        (try
         sigmaBienForme classesDeclarees mContraintes tAbs compo;
+        with Sigma_error s_err -> raise (Type_error (Printf.sprintf "For method %s.%s, %s" nom_classe nom_meth s_err, inter)));
+        
         let ok = List.for_all2 (fun x y -> let tpp = appRec x in estSousType tpp (remplaceType (snd y) compo)) liste_expr tPar in
         if not ok then failwith "sous-typage error"
         else
