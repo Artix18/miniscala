@@ -53,7 +53,7 @@ let lPAFromPT listePT =
     List.map (fun pt -> match pt with |PTsimple(nom)|PTbigger(nom,_)|PTsmaller(nom,_) -> nom) listePT 
 
 let listeParamsAbstraits classe =
-    let Class(_,listePTC,_,_,_)=classe in
+    let Class(_,_,listePTC,_,_,_)=classe in
     lPAFromPTC listePTC
 
 let getNameOfType typ =
@@ -63,16 +63,16 @@ let getClassFromName name classesDeclarees =
     (Smap.find name classesDeclarees)
 
 let basicType classesDeclarees name =
-    let Class(_, lPTC, lP, typePere, lD) = (Smap.find name classesDeclarees) in
-    let lT = List.map (fun idParam -> (idParam, dummy_inter, ArgsType [])) (lPAFromPTC lPTC) in
-    (name, dummy_inter, ArgsType lT)
+    let Class(_, inter, lPTC, lP, typePere, lD) = (Smap.find name classesDeclarees) in
+    let lT = List.map (fun idParam -> (idParam, inter, ArgsType [])) (lPAFromPTC lPTC) in
+    (name, inter, ArgsType lT)
 
 let getClassFromType typ classesDeclarees = 
     let (c:clas)=getClassFromName (getNameOfType typ) classesDeclarees in
     c
 
 let typePere nomClasse classesDeclarees =
-    let Class(_,_,_,(typPere, _),_) = (Smap.find nomClasse classesDeclarees) in
+    let Class(_,_,_,_,(typPere, _),_) = (Smap.find nomClasse classesDeclarees) in
     typPere
 
 let rec fleche c1 c2 classesDeclarees =
@@ -113,7 +113,7 @@ let rec sousType classesDeclarees mContraintes t1 t2 =
     | "Null",    _ -> not (estSousType t2 (realBasicType "AnyVal"))
     | c1(* *),     c2(* *) when c1=c2 ->
         let classeDeC1 = (Smap.find c1 classesDeclarees) in
-        let Class(_,listeTypeAbstraits,_,_,_) = classeDeC1 in
+        let Class(_,_,listeTypeAbstraits,_,_,_) = classeDeC1 in
         let p x y z = (
             match fst x with
             | ModifNone  -> eqTypes classesDeclarees mContraintes y z (* peut être pas vraiment ça pour tester cette egalite, à voir *)
@@ -138,7 +138,7 @@ and eqTypes classesDeclarees mContraintes a b =
     (estSousType a b) && (estSousType b a)
 
 let getListeParamsTypeFromClass classe =
-    let Class(_,ptListe,_,_,_) = classe in
+    let Class(_,_,ptListe,_,_,_) = classe in
     List.map (fun x -> snd x) ptListe
 
 let parConcret typ = let (a,b,ArgsType(c))=typ in c
@@ -164,7 +164,7 @@ let sigmaBienForme classesDeclarees mContraintes listeParamsType mSigma =
 (* Idéalement, générer le message d'erreur directement ici *)
 let rec bienForme classesDeclarees mContraintes ((nom,inter,ArgsType(params)) : typ) =
     if not (Smap.mem nom classesDeclarees) then raise (Unbound_error (Printf.sprintf "Type name %s doesn't exist." nom, inter));
-    let Class(_, listePTC, _,_,_) = Smap.find nom classesDeclarees in
+    let Class(_,_, listePTC, _,_,_) = Smap.find nom classesDeclarees in
     if List.length listePTC <> List.length params then raise (Param_error (Printf.sprintf "Class %s expects %d type parameters, but was given %d." nom (List.length listePTC) (List.length params), inter));
     List.iter (fun x -> bienForme classesDeclarees mContraintes x; ()) params;
     let mSigma = construitSigma nom params classesDeclarees in
@@ -319,14 +319,14 @@ let rec type_expr env classesDeclarees membresClasse mContraintes methC loc_expr
     | Enew(nom_classe,ArgsType(args_type),(liste_locd_expr)) ->
         estBF (nom_classe, snd loc_expr,ArgsType(args_type));
         let mSigma = construitSigma nom_classe args_type classesDeclarees in
-        let Class (nom_classe, typesParamTheo, paramTheo, _,_) = Smap.find nom_classe classesDeclarees in
+        let Class (nom_classe,_, typesParamTheo, paramTheo, _,_) = Smap.find nom_classe classesDeclarees in
         let checkType e y =
             let t1 = appRec e in
             let t2 = (remplaceType (snd y) mSigma) in
             if not (estSousType t1 t2)
             then raise (Type_error ((Printf.sprintf "This expression has type %a, but was expected to be castable to %a." typeDisplay t1 typeDisplay t2), snd e))
         in if (List.length liste_locd_expr <> List.length paramTheo)
-        then raise (Param_error ((Printf.sprintf "Class %s's constructor expects %d parameters, but was given %d" nom_classe (List.length paramTheo) (List.length liste_locd_expr)), dummy_inter (** TODO *) ))
+        then raise (Param_error ((Printf.sprintf "Class %s's constructor expects %d parameters, but was given %d" nom_classe (List.length paramTheo) (List.length liste_locd_expr)), snd loc_expr))
         else
             List.iter2 checkType liste_locd_expr paramTheo;
             (nom_classe, snd loc_expr,ArgsType(args_type))
@@ -397,9 +397,9 @@ let varConst var =
     iscst
 
 let className classe = 
-    let Class(n,_,_,_,_) = classe in n
+    let Class(n,_,_,_,_,_) = classe in n
 let classParams classe =
-    let Class(_,_,p,_,_) = classe in p
+    let Class(_,_,_,p,_,_) = classe in p
 
 let listeTypeFromPTs liste = 
     List.map (fun x -> (getNamePT x, dummy_inter, ArgsType([]))) liste
@@ -441,13 +441,13 @@ let extendTenTprimeStep1 classesDeclarees mContraintes membresClasse methC liste
     let realBasicType = basicType classesDeclarees in
     let checkTi (newCD, newConstraints, newMembresClasse, newMethC) x =
         match x with
-        | PTsimple(nom)        -> (Smap.add nom (Class(nom, [], [], (realBasicType "Any", []), [])) newCD, retire newConstraints nom, retire newMembresClasse nom, retire newMethC nom)
+        | PTsimple(nom)        -> (Smap.add nom (Class(nom, dummy_inter, [], [], (realBasicType "Any", []), [])) newCD, retire newConstraints nom, retire newMembresClasse nom, retire newMethC nom)
         | PTbigger(nom, typ)   -> bienForme newCD newConstraints typ;
-                                  let nnCD = Smap.add nom (Class(nom, [], [], (realBasicType "Any", []), [])) newCD in
+                                  let nnCD = Smap.add nom (Class(nom, dummy_inter, [], [], (realBasicType "Any", []), [])) newCD in
                                   let nnCT = Smap.add nom ([typ]) newConstraints in
                                   (nnCD, nnCT, retire newMembresClasse nom, retire newMethC nom)
         | PTsmaller(nom, typ)  -> bienForme newCD newConstraints typ;
-                                  let nnCD = Smap.add nom (Class(nom, [], [], (typ, []) , [])) newCD in
+                                  let nnCD = Smap.add nom (Class(nom, dummy_inter, [], [], (typ, []) , [])) newCD in
                                   let (tpName, _, ArgsType(tpList)) = typ in
                                   
                                   let ptitSigma = construitSigma tpName tpList newCD in
@@ -478,10 +478,10 @@ let ajouteVarConstruct nom_classe parList membresClasse =
         Smap.add nom_classe lToAdd membresClasse
 
 let rec type_class classesDeclarees membresClasse mContraintes methC classe = 
-    let Class(nom_classe,_,_,(typPere, exp_list),liste_decl) = classe in
+    let Class(nom_classe, inter,_,_,(typPere, exp_list),liste_decl) = classe in
     
     if Smap.mem nom_classe classesDeclarees then
-        raise (Unicity_error(Printf.sprintf "Class %s is already declared." nom_classe, dummy_inter));
+        raise (Unicity_error(Printf.sprintf "Class %s is already declared." nom_classe, inter));
 
     let rvCd = ref classesDeclarees in
     let rvMembresClasse = ref membresClasse in
@@ -546,13 +546,13 @@ let rec type_class classesDeclarees membresClasse mContraintes methC classe =
 
 (*main n'a pas le droit de s'instancier elle-même. TODO *)
 let typeMain classesDeclarees membresClasse mContraintes methC classe =
-    type_class classesDeclarees membresClasse mContraintes methC (Class("Main", [], [], (basicType classesDeclarees "AnyVal", []), classe))
+    type_class classesDeclarees membresClasse mContraintes methC (Class("Main", dummy_inter, [], [], (basicType classesDeclarees "AnyVal", []), classe))
 
 let makeBC nom_classe nom_pere classesDeclarees =
-    Class(nom_classe, [], [], (basicType classesDeclarees nom_pere, []), [])
+    Class(nom_classe, dummy_inter, [], [], (basicType classesDeclarees nom_pere, []), [])
 
 let getDefaultCl = 
-    let classes = Smap.add "Any" (Class("Any", [], [], (("Any",dummy_inter, ArgsType []), []), [])) Smap.empty in
+    let classes = Smap.add "Any" (Class("Any", dummy_inter, [], [], (("Any",dummy_inter, ArgsType []), []), [])) Smap.empty in
     let classes = Smap.add "AnyVal"  (makeBC "AnyVal"  "Any"    classes) classes in
     let classes = Smap.add "AnyRef"  (makeBC "AnyRef"  "Any"    classes) classes in
     let classes = Smap.add "Unit"    (makeBC "Unit"    "AnyVal" classes) classes in
@@ -561,7 +561,7 @@ let getDefaultCl =
     let classes = Smap.add "String"  (makeBC "String"  "AnyRef" classes) classes in
     let classes = Smap.add "Null"    (makeBC "Null"    "String" classes) classes in
     let classes = Smap.add "Nothing" (makeBC "Nothing" "Null"   classes) classes in
-    let classes = Smap.add "Array"   (Class("Array", [(ModifNone, PTsimple("T"))], [], (basicType classes "AnyRef",[]),[])) classes in
+    let classes = Smap.add "Array"   (Class("Array", dummy_inter, [(ModifNone, PTsimple("T"))], [], (basicType classes "AnyRef",[]),[])) classes in
     classes
 
 let typeFichier f =

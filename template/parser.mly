@@ -62,7 +62,7 @@ clas:
     LBRA
         dl = separated_list(SEMICOLON, decl) ;
     RBRA
-    { Class (name, ptcl, pl, (("AnyRef", ($startpos(name), $endpos(name)), ArgsType []),[]), dl) }
+    { Class (name, ($startpos(name), $endpos(name)), ptcl, pl, (("AnyRef", (Lexing.dummy_pos,Lexing.dummy_pos), ArgsType []),[]), dl) }
 | CLASS; name = IDENT ;
         ptcl = opt_ne_pl(LSQ, param_type_class, COMMA, RSQ) ;
         pl   = opt_pl   (LP,  param,            COMMA, RP ) ;
@@ -71,7 +71,7 @@ clas:
     LBRA
         dl = separated_list(SEMICOLON, decl) ;
     RBRA
-    { Class (name, ptcl, pl, (ty,pt), dl) }
+    { Class (name, ($startpos(name), $endpos(name)), ptcl, pl, (ty,pt), dl) }
 
 decl:
 | v = var     { Dvar  v }

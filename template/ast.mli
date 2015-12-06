@@ -70,7 +70,7 @@ type decl =
   | Dvar of var
   | Dmeth of methode
   
-type clas = Class of ident * param_type_class list * param list * (typ * (locd_expr list)) * decl list
+type clas = Class of ident * interv * param_type_class list * param list * (typ * (locd_expr list)) * decl list
 
 type class_Main = decl list
 
