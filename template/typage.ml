@@ -437,6 +437,11 @@ let ajouteMethClasse nom_pere nom_classe mMeth sigma =
 let retire map nom = 
     Smap.filter (fun key _ -> key <> nom) map
 
+let isIllegalExtend name =
+    match name with
+    |"Any"|"AnyVal"|"Unit"|"Int"|"Boolean"|"String"|"Null"|"Nothing" -> true
+    |_ -> false
+
 let extendTenTprimeStep1 classesDeclarees mContraintes membresClasse methC listeT =
     let realBasicType = basicType classesDeclarees in
     let checkTi (newCD, newConstraints, newMembresClasse, newMethC) x =
@@ -478,7 +483,7 @@ let ajouteVarConstruct nom_classe parList membresClasse =
         Smap.add nom_classe lToAdd membresClasse
 
 let rec type_class classesDeclarees membresClasse mContraintes methC classe = 
-    let Class(nom_classe, inter,_,_,(typPere, exp_list),liste_decl) = classe in
+    let Class(nom_classe,inter,_,_,(typPere, exp_list),liste_decl) = classe in
     
     if Smap.mem nom_classe classesDeclarees then
         raise (Unicity_error(Printf.sprintf "Class %s is already declared." nom_classe, inter));
@@ -500,7 +505,12 @@ let rec type_class classesDeclarees membresClasse mContraintes methC classe =
 
     (* il faut ajouter tous les trucs du pere de classe à Gamma *)
     
-    let ptitSigma = construitSigma tpName tpList classesDeclarees in (*clDecl ou newClDecl ne devrait rien changer ?*)
+    if not (Smap.mem tpName classesDeclarees) then
+        raise (Unicity_error(Printf.sprintf "Trying to extend a non-existing class : %s." tpName, inter));
+    if isIllegalExtend tpName then
+        raise (Unicity_error(Printf.sprintf "Trying to extend from a basic type : %s." tpName, inter));
+    let ptitSigma = construitSigma tpName tpList classesDeclarees in
+    (*classesDeclarees comme ça on interdit d'heriter d'une classe non existente*)
     
     rvMembresClasse := ajouteMemClasse tpName nom_classe (!rvMembresClasse) ptitSigma;
     rvMethC := ajouteMethClasse tpName nom_classe (!rvMethC) ptitSigma;
@@ -546,7 +556,7 @@ let rec type_class classesDeclarees membresClasse mContraintes methC classe =
 
 (*main n'a pas le droit de s'instancier elle-même. TODO *)
 let typeMain classesDeclarees membresClasse mContraintes methC classe =
-    type_class classesDeclarees membresClasse mContraintes methC (Class("Main", dummy_inter, [], [], (basicType classesDeclarees "AnyVal", []), classe))
+    type_class classesDeclarees membresClasse mContraintes methC (Class("Main", dummy_inter, [], [], (basicType classesDeclarees "AnyRef", []), classe))
 
 let makeBC nom_classe nom_pere classesDeclarees =
     Class(nom_classe, dummy_inter, [], [], (basicType classesDeclarees nom_pere, []), [])
