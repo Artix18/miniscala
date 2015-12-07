@@ -337,6 +337,8 @@ let rec            type_expr mapVariance vPC env loc_var classesDeclarees membre
         then realBasicType "Unit"
         else raise (Type_error ((Printf.sprintf "This expression has type %a, but was expected to be Boolean." typeDisplay t), snd e_cond))
     | Enew(nom_classe,ArgsType(args_type),(liste_locd_expr)) ->
+        if nom_classe = "Main" then 
+            raise (Unicity_error(Printf.sprintf "Illegal instanciation of class Main.", snd loc_expr));
         estBF (nom_classe, snd loc_expr,ArgsType(args_type));
         let mSigma = construitSigma nom_classe args_type classesDeclarees in
         let Class (nom_classe,_, typesParamTheo, paramTheo, _,_) = Smap.find nom_classe classesDeclarees in
@@ -350,7 +352,6 @@ let rec            type_expr mapVariance vPC env loc_var classesDeclarees membre
         else
             List.iter2 checkType liste_locd_expr paramTheo;
             (nom_classe, snd loc_expr,ArgsType(args_type))
-    (* | il manque un truc que je ne comprends pas ici, avec e.m[]() *)
     | Ecall(lv,ArgsType(args_type),liste_expr) ->
 
         (*(try
@@ -454,7 +455,6 @@ let ajouteMemClasse nom_pere nom_classe mMem sigma =
 
 let ajouteMethClasse nom_pere nom_classe mMeth sigma = 
     let appli_sigma (do_over, ident, ptl, pl, typ, locd_expr, interv) =
-        (*je crois qu'on peut appliquer bêtement sigma à pl et typ. Mais il faut retirer ceux de ptl *)
         let sigmaPrime = enlevePtlASigma (lPAFromPT ptl) sigma in
         ((do_over, ident, ptl, appliqueSigmaAPl sigmaPrime pl, remplaceType typ sigmaPrime, locd_expr, interv):methode)
     in
@@ -526,6 +526,37 @@ let getVarOfCl name classesDeclarees membresClasse =
     if not (Smap.mem name membresClasse) then []
     else List.filter (fun x -> not (List.mem x (listeConstruct name classesDeclarees))) (List.map (fun (n,_,_) -> n) (Smap.find name membresClasse))
 
+let existenceDeFonction ident nom_classe newMethC = 
+    if not (Smap.mem nom_classe newMethC) then false
+    else
+        List.exists (fun (_,name,_,_,_,_,_) -> name=ident) (Smap.find nom_classe newMethC)
+
+let eqPTFlag x y = match x,y with
+    | PTsimple(_),PTsimple(_)|PTbigger(_,_),PTbigger(_,_)|PTsmaller(_,_),PTsmaller(_,_) -> true
+    | _,_ -> false
+
+let checkOverPT meth methPere = 
+    let (_,_,ptl,pl,rt,_,inter) = meth in
+    let (_,_,ptl2,_,_,_,inter2) = methPere in
+    if List.for_all2 (fun x y -> eqPTFlag x y) ptl ptl2 then ()
+    else
+        failwith "bidule"
+
+let checkOverArgs meth methPere = 
+    let (_,_,_,pl,_,_,inter) = meth in
+    let (_,_,_,pl2,_,_,inter2) = meth in
+    ()
+
+let checkOverRt meth methPere = 
+    let (_,_,_,_,rt,_,inter) = meth in
+    let (_,_,_,_,rt2,_,inter2) = meth in
+    ()
+
+let checkOver methode nom_classe newMethC = 
+    let methPere = List.find (fun (_,name,_,_,_,_,_) -> name=ident) (Smap.find nom_classe newMethC) in
+    checkOverArgs methode methPere;
+    checkOverPT   methode methPere;
+    checkOverRt     methode methPere
 
 let rec type_class vPC classesDeclarees membresClasse mContraintes methC classe = 
     let Class(nom_classe,inter,listePTC,pList,(typPere, exp_list),liste_decl) = classe in
@@ -632,15 +663,51 @@ let rec type_class vPC classesDeclarees membresClasse mContraintes methC classe 
             List.iter (fun param -> checkVariance vPC mapVariance ModifMinus (snd param)) param_list;
             checkVariance vPC mapVariance ModifPlus typRet;
             
-            (** TODO : check override **)
+            (* check override *)
+            if not (do_override) && (existenceDeFonction ident nom_classe newMethC) then
+                raise (Unicity_error (Printf.sprintf "Redeclaration of the method %s which already exists in a super-class of %s. Maybe you forgot keyword override?" ident nom_classe, snd locd_expr));
+            if do_override then
+            (
+                if not (existenceDeFonction ident nom_classe newMethC) then
+                    raise (Unicity_error (Printf.sprintf "Keyword override used but method %s was not declared in a super-class of %s." ident nom_classe, snd locd_expr));
+                checkOver methode nom_classe newMethC
+            );
             (newClassesDeclarees, newMembresClasse, newMContraintes, nnMethC)
     in
     let _ = List.fold_left type_decl (newClassesDeclarees, membresClasse, newMContraintes, methC) liste_decl in
     (Smap.add nom_classe listeVariance vPC,!rvCd, !rvMembresClasse, !rvMethC)
 
+let verifMainValide meth classesDeclarees mContraintes =
+    let (_,ident,ptl,pl,rv,_,inter) = meth in
+    if (List.length ptl <> 0) then
+        raise (Unicity_error(Printf.sprintf "Function main should not have type parameters.", inter));
+    if (List.length pl <> 1) then
+        raise (Unicity_error(Printf.sprintf "Function main should have exactly one parameter, of type Array[String].", inter));
+    if (not (eqTypes classesDeclarees mContraintes rv (basicType classesDeclarees "Unit"))) then
+        raise (Unicity_error(Printf.sprintf "Function main's return type should be unit.", inter));
+    let [(_,typ)] = pl in
+    if (not (eqTypes classesDeclarees mContraintes typ ("Array", dummy_inter, ArgsType([("String",dummy_inter,ArgsType([]))])))) then
+        raise (Unicity_error(Printf.sprintf "Function main should have exactly one parameter, of type Array[String].", inter));
+    true
+
+let chercheMethMain nMethC classesDeclarees mContraintes = 
+    let p meth =
+        let (_,ident,_,_,_,_,_)=meth in 
+        if ident="main" then
+            verifMainValide meth classesDeclarees mContraintes
+        else
+            false
+    in
+    List.exists p (Smap.find "Main" nMethC)
+
 (*main n'a pas le droit de s'instancier elle-même. TODO *)
 let typeMain   vPC classesDeclarees membresClasse mContraintes methC classe =
-    type_class vPC classesDeclarees membresClasse mContraintes methC (Class("Main", dummy_inter, [], [], (basicType classesDeclarees "AnyRef", []), classe))
+    let vPC,nCD,nMC,nMethC = type_class vPC classesDeclarees membresClasse mContraintes methC (Class("Main", dummy_inter, [], [], (basicType classesDeclarees "AnyRef", []), classe)) in
+    if not (Smap.mem "Main" nMethC) then
+        raise (Unicity_error(Printf.sprintf "Class Main should have a function main.", dummy_inter));
+    if not (chercheMethMain nMethC classesDeclarees mContraintes) then
+        raise (Unicity_error(Printf.sprintf "Class Main should have a function main.", dummy_inter));
+    ()
 
 let makeBC nom_classe nom_pere classesDeclarees =
     Class(nom_classe, dummy_inter, [], [], (basicType classesDeclarees nom_pere, []), [])
