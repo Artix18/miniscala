@@ -221,12 +221,11 @@ let rec checkVariance vPC mapVariance modif (t : typ) =
     if Smap.mem nom vPC then (
     let xor m1 m2 = match m1,m2 with
     | ModifPlus,  ModifPlus  | ModifMinus, ModifMinus -> ModifPlus
-    | ModifMinus, ModifPlus  | ModifPlus,  ModifMinus -> ModifPlus
+    | ModifMinus, ModifPlus  | ModifPlus,  ModifMinus -> ModifMinus
     | _, _ -> ModifNone
     in
     List.iter2 (fun varBase nouvType -> checkVariance vPC mapVariance (xor modif varBase) nouvType) (Smap.find nom vPC) tl);)
 
-(* j'ai mis nawak pour les loc_expr et inter, à toi de voir. Mais ça compile *)
 let rec            type_expr mapVariance vPC env loc_var classesDeclarees membresClasse mContraintes methC loc_expr =
     let appRec   = type_expr mapVariance vPC env []      classesDeclarees membresClasse mContraintes methC in 
     let appRec2  = type_expr mapVariance vPC env loc_var classesDeclarees membresClasse mContraintes methC in 
@@ -481,7 +480,7 @@ let isIllegalExtend name =
 let doublon liste = 
     List.exists (fun x -> List.length (List.filter (fun p -> p=x) liste) > 1) liste
 
-let extendTenTprimeStep1 classesDeclarees mContraintes membresClasse methC listeT =
+let extendTenTprimeStep1 classesDeclarees mContraintes membresClasse methC listeT vPC mapVariance isCl =
     let realBasicType = basicType classesDeclarees in
     let checkTi (newCD, newConstraints, newMembresClasse, newMethC) x = match x with
         | PTsimple(nom)        ->
@@ -490,6 +489,11 @@ let extendTenTprimeStep1 classesDeclarees mContraintes membresClasse methC liste
             bienForme newCD newConstraints typ;
             let nnCD = Smap.add nom (Class(nom, dummy_inter, [], [], (realBasicType "Any", []), [])) newCD in
             let nnCT = Smap.add nom ([typ]) newConstraints in
+            if isCl then
+                checkVariance vPC mapVariance ModifMinus typ
+            else
+                checkVariance vPC mapVariance ModifPlus typ
+            ;
             (nnCD, nnCT, retire newMembresClasse nom, retire newMethC nom)
         | PTsmaller(nom, typ)  ->
             bienForme newCD newConstraints typ;
@@ -500,6 +504,11 @@ let extendTenTprimeStep1 classesDeclarees mContraintes membresClasse methC liste
 
             let nnMC = ajouteMemClasse tpName nom newMembresClasse ptitSigma in
             let nnMethC = ajouteMethClasse tpName nom newMethC ptitSigma in
+            if isCl then
+                checkVariance vPC mapVariance ModifPlus typ
+            else
+                checkVariance vPC mapVariance ModifMinus typ
+            ;
             (nnCD, retire newConstraints nom, nnMC, nnMethC)
     in
     List.fold_left checkTi (classesDeclarees, mContraintes, membresClasse, methC) listeT
@@ -610,7 +619,7 @@ let rec type_class vPC classesDeclarees membresClasse mContraintes methC classe 
     if doublon (lPAFromPT listeT) then
         raise (Unicity_error(Printf.sprintf "Types parameters should have different names in class \"%s\" declaration." nom_classe, inter));
     
-    let newClassesDeclarees, newMContraintes, membresClasse, methC = extendTenTprimeStep1 classesDeclarees mContraintes membresClasse methC listeT in
+    let newClassesDeclarees, newMContraintes, membresClasse, methC = extendTenTprimeStep1 classesDeclarees mContraintes membresClasse methC listeT vPC mapVariance true in
     
     (*step 2*)
     let (tpName, _, ArgsType(tpList)) = typPere in
@@ -666,7 +675,7 @@ let rec type_class vPC classesDeclarees membresClasse mContraintes methC classe 
             
             rvMembresClasse := ajouteMembre (!rvMembresClasse) nom_classe (varName var, varConst var, resTyp);
             
-            (newClassesDeclarees, nnMCl, newMContraintes, newMethC) (*TODO check si je le fais bien *)
+            (newClassesDeclarees, nnMCl, newMContraintes, newMethC)
             
         | Dmeth(methode) ->
             (*let copyMethC = newMethC in*)
@@ -678,7 +687,7 @@ let rec type_class vPC classesDeclarees membresClasse mContraintes methC classe 
         
             if doublon (lPAFromPT param_type_list) then
                 raise (Unicity_error(Printf.sprintf "Types parameters should have different names in method \"%s\" (from class \"%s\") declaration." ident nom_classe, interv));
-            let nnCD,nnMCT,newMembresClasse,newMethC=extendTenTprimeStep1 newClassesDeclarees newMContraintes newMembresClasse newMethC param_type_list in
+            let nnCD,nnMCT,newMembresClasse,newMethC=extendTenTprimeStep1 newClassesDeclarees newMContraintes newMembresClasse newMethC param_type_list vPC mapVariance false in
   
             if doublon (lPAFromPL param_list) then
                 raise (Unicity_error(Printf.sprintf "Parameters should have different names in class \"%s\" declaration." nom_classe, interv));
@@ -734,7 +743,6 @@ let chercheMethMain nMethC classesDeclarees mContraintes =
     in
     List.exists p (Smap.find "Main" nMethC)
 
-(*main n'a pas le droit de s'instancier elle-même. TODO *)
 let typeMain   vPC classesDeclarees membresClasse mContraintes methC classe =
     let vPC,nCD,nMC,nMethC = type_class vPC classesDeclarees membresClasse mContraintes methC (Class("Main", dummy_inter, [], [], (basicType classesDeclarees "AnyRef", []), classe)) in
     if not (Smap.mem "Main" nMethC) then
