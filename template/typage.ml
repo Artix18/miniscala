@@ -453,10 +453,19 @@ let ajouteMemClasse nom_pere nom_classe mMem sigma =
     if Smap.mem nom_pere mMem then Smap.add nom_classe (List.map appli_sigma (Smap.find nom_pere mMem)) mMem
     else mMem
 
+let appliqueSigmaAPtl ptl sigma = 
+    let p pt = match pt with
+    | PTsimple(_) -> pt
+    | PTbigger(a,typ)-> PTbigger(a, remplaceType typ sigma)
+    | PTsmaller(a,typ)-> PTsmaller(a, remplaceType typ sigma)
+    in
+    List.map p ptl
+
 let ajouteMethClasse nom_pere nom_classe mMeth sigma = 
     let appli_sigma (do_over, ident, ptl, pl, typ, locd_expr, interv) =
+        let ptlBis = appliqueSigmaAPtl ptl sigma in
         let sigmaPrime = enlevePtlASigma (lPAFromPT ptl) sigma in
-        ((do_over, ident, ptl, appliqueSigmaAPl sigmaPrime pl, remplaceType typ sigmaPrime, locd_expr, interv):methode)
+        ((do_over, ident, ptlBis, appliqueSigmaAPl sigmaPrime pl, remplaceType typ sigmaPrime, locd_expr, interv):methode)
     in
     if Smap.mem nom_pere mMeth then Smap.add nom_classe (List.map appli_sigma (Smap.find nom_pere mMeth)) mMeth
     else mMeth
@@ -531,38 +540,62 @@ let existenceDeFonction ident nom_classe newMethC =
     else
         List.exists (fun (_,name,_,_,_,_,_) -> name=ident) (Smap.find nom_classe newMethC)
 
-let eqPTFlag x y = match x,y with
-    | PTsimple(_),PTsimple(_)|PTbigger(_,_),PTbigger(_,_)|PTsmaller(_,_),PTsmaller(_,_) -> true
+let rec eqPTBornes classesDeclarees mContraintes x y = match x,y with
+    |PTsimple(_),PTsimple(_)->true
+    |PTbigger(_,t1),PTbigger(_,t2) -> eqTypes classesDeclarees mContraintes t1 t2
+    |PTsmaller(_,t1),PTsmaller(_,t2) -> eqTypes classesDeclarees mContraintes t1 t2
+    |_,PTbigger(b,t2) -> eqTypes classesDeclarees mContraintes t2 (basicType classesDeclarees "Nothing") && eqPTBornes classesDeclarees mContraintes x (PTsimple(b))
+    |PTbigger(_,_),_ -> eqPTBornes classesDeclarees mContraintes y x
+    |_,PTsmaller(_,_) -> eqPTBornes classesDeclarees mContraintes y x
+    |PTsmaller(a,t2),_ -> eqTypes classesDeclarees mContraintes t2 (basicType classesDeclarees "Any") && eqPTBornes classesDeclarees mContraintes (PTsimple(a)) y
     | _,_ -> false
 
-let checkOverPT meth methPere = 
-    let (_,_,ptl,pl,rt,_,inter) = meth in
+let checkOverPT meth methPere nom_classe classesDeclarees mContraintes = 
+    let (_,nom,ptl,pl,rt,_,inter) = meth in
     let (_,_,ptl2,_,_,_,inter2) = methPere in
-    if List.for_all2 (fun x y -> eqPTFlag x y) ptl ptl2 then ()
+    if List.length ptl <> List.length ptl2 then
+        raise (Unicity_error(Printf.sprintf "Overriding method \"%s\" in class \"%s\" has not the same amount of type parameters than the one in the super-class." nom nom_classe, inter));
+    if List.for_all2 (fun x y -> eqPTBornes classesDeclarees mContraintes x y) ptl ptl2 then construitMapAssociative (lPAFromPT ptl2) (lPAFromPT ptl)
     else
-        failwith "bidule"
+        raise (Unicity_error(Printf.sprintf "Overriding method \"%s\" in class \"%s\" has different inequalities constraints than the one in the super-class." nom nom_classe, inter))
+        
+let rec remplaceNom sigmaNom typ = 
+    let (nom_cl,inter,ArgsType(tl)) = typ in
+    let remplFini = ArgsType(List.map (remplaceNom sigmaNom) tl) in
+    if Smap.mem nom_cl sigmaNom then
+        (Smap.find nom_cl sigmaNom, inter, remplFini)
+    else
+        (nom_cl, inter, remplFini)
 
-let checkOverArgs meth methPere = 
-    let (_,_,_,pl,_,_,inter) = meth in
-    let (_,_,_,pl2,_,_,inter2) = meth in
-    ()
+let checkOverArgs meth methPere nom_classe classesDeclarees mContraintes sigmaNom = 
+    let (_,nom,_,pl,_,_,inter) = meth in
+    let (_,_,_,pl2,_,_,inter2) = methPere in
+    if List.length pl <> List.length pl2 then
+        raise (Unicity_error(Printf.sprintf "Overriding method \"%s\" in class \"%s\" has not the same amount of parameters than the one in the super-class." nom nom_classe, inter));
+    if not (List.for_all2 (fun x y -> eqTypes classesDeclarees mContraintes (snd x) (remplaceNom sigmaNom (snd y))) pl pl2) then
+        raise (Unicity_error(Printf.sprintf "Overriding method \"%s\", in class \"%s\", has parameters whose types are not equal to the ones in the super-class." nom nom_classe, inter))
+    else
+        ()
 
-let checkOverRt meth methPere = 
-    let (_,_,_,_,rt,_,inter) = meth in
-    let (_,_,_,_,rt2,_,inter2) = meth in
-    ()
+let checkOverRt meth methPere nom_classe nnCD nnMCT sigmaNom = 
+    let (_,nom,_,_,rt,_,inter) = meth in
+    let (_,_,_,_,rt2,_,inter2) = methPere in
+    if sousType nnCD nnMCT rt (remplaceNom sigmaNom rt2) then ()
+    else
+        raise (Unicity_error(Printf.sprintf "Overriding method \"%s\" in class \"%s\" has a return-type not compatible with the one in the super-class." nom nom_classe, inter))
 
-let checkOver methode nom_classe newMethC = 
+let checkOver methode nom_classe newMethC nnCD nnMCT = 
+    let (_,ident, _,_,_,_,_) = methode in
     let methPere = List.find (fun (_,name,_,_,_,_,_) -> name=ident) (Smap.find nom_classe newMethC) in
-    checkOverArgs methode methPere;
-    checkOverPT   methode methPere;
-    checkOverRt     methode methPere
+    let sigmaNom = checkOverPT   methode methPere nom_classe nnCD nnMCT in
+    checkOverArgs methode methPere nom_classe nnCD nnMCT sigmaNom;
+    checkOverRt     methode methPere nom_classe nnCD nnMCT sigmaNom
 
 let rec type_class vPC classesDeclarees membresClasse mContraintes methC classe = 
     let Class(nom_classe,inter,listePTC,pList,(typPere, exp_list),liste_decl) = classe in
     
     if Smap.mem nom_classe classesDeclarees then
-        raise (Unicity_error(Printf.sprintf "Class %s is already declared." nom_classe, inter));
+        raise (Unicity_error(Printf.sprintf "Class \"%s\" is already declared." nom_classe, inter));
 
     let rvCd = ref classesDeclarees in
     let rvMembresClasse = ref membresClasse in
@@ -575,7 +608,7 @@ let rec type_class vPC classesDeclarees membresClasse mContraintes methC classe 
     (*step 1*)
     
     if doublon (lPAFromPT listeT) then
-        raise (Unicity_error(Printf.sprintf "Types parameters should have different names in class %s declaration." nom_classe, inter));
+        raise (Unicity_error(Printf.sprintf "Types parameters should have different names in class \"%s\" declaration." nom_classe, inter));
     
     let newClassesDeclarees, newMContraintes, membresClasse, methC = extendTenTprimeStep1 classesDeclarees mContraintes membresClasse methC listeT in
     
@@ -606,7 +639,7 @@ let rec type_class vPC classesDeclarees membresClasse mContraintes methC classe 
     (* step 3*)
     let newEnv = (Smap.add "this" ((className classe, dummy_inter, ArgsType(listeTypeFromPTs listeT)), true) Smap.empty) in
     if doublon (lPAFromPL pList) then
-        raise (Unicity_error(Printf.sprintf "Parameters should have different names in class %s declaration." nom_classe, inter));
+        raise (Unicity_error(Printf.sprintf "Parameters should have different names in class \"%s\" declaration." nom_classe, inter));
     
     let membresClasse = ajouteVarConstruct nom_classe (classParams classe) membresClasse in
     rvMembresClasse := ajouteVarConstruct nom_classe (classParams classe) (!rvMembresClasse);
@@ -624,7 +657,7 @@ let rec type_class vPC classesDeclarees membresClasse mContraintes methC classe 
             let (_,_,_,_,inter) = var in 
             
             if List.mem (varName var) (!curVDecl) then 
-                raise (Unicity_error(Printf.sprintf "Variable %s already declared in the current class %s (or its constructor, or its parents)." (varName var) nom_classe, inter));
+                raise (Unicity_error(Printf.sprintf "Variable \"%s\" already declared in the current class \"%s\" (or its constructor, or its parents)." (varName var) nom_classe, inter));
             curVDecl := (varName var)::(!curVDecl);
 
             let resTyp = type_expr mapVariance vPC newEnv [] newClassesDeclarees newMembresClasse newMContraintes newMethC (Ebloc([Idef(var); Iexpr(Eaccess(Lident(varName var,dummy_inter)), dummy_inter)]),dummy_inter) in
@@ -636,18 +669,19 @@ let rec type_class vPC classesDeclarees membresClasse mContraintes methC classe 
             (newClassesDeclarees, nnMCl, newMContraintes, newMethC) (*TODO check si je le fais bien *)
             
         | Dmeth(methode) ->
+            (*let copyMethC = newMethC in*)
             let (do_override,ident,param_type_list,param_list,typRet,locd_expr,interv) = methode in
         
             if List.mem ident (!curMDecl) then
-                raise (Unicity_error(Printf.sprintf "Method %s already declared in the current class %s." (ident) nom_classe, interv));
+                raise (Unicity_error(Printf.sprintf "Method \"%s\" already declared in the current class \"%s\"." (ident) nom_classe, interv));
             curMDecl := ident::(!curMDecl);
         
             if doublon (lPAFromPT param_type_list) then
-                raise (Unicity_error(Printf.sprintf "Types parameters should have different names in method %s (from class %s) declaration." ident nom_classe, interv));
+                raise (Unicity_error(Printf.sprintf "Types parameters should have different names in method \"%s\" (from class \"%s\") declaration." ident nom_classe, interv));
             let nnCD,nnMCT,newMembresClasse,newMethC=extendTenTprimeStep1 newClassesDeclarees newMContraintes newMembresClasse newMethC param_type_list in
   
             if doublon (lPAFromPL param_list) then
-                raise (Unicity_error(Printf.sprintf "Parameters should have different names in class %s declaration." nom_classe, interv));
+                raise (Unicity_error(Printf.sprintf "Parameters should have different names in class \"%s\" declaration." nom_classe, interv));
             let nnEnv = extendStep3 newEnv nnCD nnMCT param_list in (*not found ici *)
             
             bienForme nnCD nnMCT typRet;
@@ -665,12 +699,12 @@ let rec type_class vPC classesDeclarees membresClasse mContraintes methC classe 
             
             (* check override *)
             if not (do_override) && (existenceDeFonction ident nom_classe newMethC) then
-                raise (Unicity_error (Printf.sprintf "Redeclaration of the method %s which already exists in a super-class of %s. Maybe you forgot keyword override?" ident nom_classe, snd locd_expr));
+                raise (Unicity_error (Printf.sprintf "Redeclaration of the method \"%s\" which already exists in a super-class of \"%s\". Maybe you forgot keyword override?" ident nom_classe, snd locd_expr));
             if do_override then
             (
                 if not (existenceDeFonction ident nom_classe newMethC) then
-                    raise (Unicity_error (Printf.sprintf "Keyword override used but method %s was not declared in a super-class of %s." ident nom_classe, snd locd_expr));
-                checkOver methode nom_classe newMethC
+                    raise (Unicity_error (Printf.sprintf "Keyword override used but method \"%s\" was not declared in a super-class of \"%s\"." ident nom_classe, snd locd_expr));
+                checkOver methode nom_classe newMethC nnCD nnMCT
             );
             (newClassesDeclarees, newMembresClasse, newMContraintes, nnMethC)
     in
