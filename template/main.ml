@@ -9,10 +9,12 @@ open Typage
 let usage = "usage: mini-scala [options] file.scala"
 
 let parse_only = ref false
+let type_only  = ref false
 
 let spec =
   [
     "--parse-only", Arg.Set parse_only, "  stop after parsing";
+    "--type-only", Arg.Set type_only, "  stop after typing";
   ]
 
 let file =
@@ -40,7 +42,9 @@ let () =
     if !parse_only then exit 0;
     typeFichier f;
     print_string "Typage reussi.";
-    print_newline()
+    print_newline();
+    if !type_only then exit 0;
+    assert(false)
   with
     | Lexer.Lexing_error s ->
 	    report (lexeme_start_p lb, lexeme_end_p lb);

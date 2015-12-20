@@ -1,5 +1,6 @@
 all:
 	ocamlopt -o ast ast.mli
+	ocamlopt -o x86_64 x86_64.mli
 	menhir --infer parser.mly
 	ocamllex lexer.mll
 	rm parser.mli
