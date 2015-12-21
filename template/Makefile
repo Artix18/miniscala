@@ -1,10 +1,9 @@
 all:
 	ocamlopt -o ast ast.mli
-	ocamlopt -o x86_64 x86_64.mli
 	menhir --infer parser.mly
 	ocamllex lexer.mll
 	rm parser.mli
-	ocamlopt -o pscala parser.ml lexer.ml typage.ml main.ml
+	ocamlopt -o pscala x86_64.ml parser.ml lexer.ml typage.ml compile.ml main.ml
 
 test:
 	for f in tests/typing/good/*.scala; do ./pscala $$f; done
