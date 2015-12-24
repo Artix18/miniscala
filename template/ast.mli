@@ -76,3 +76,58 @@ type class_Main = decl list
 
 type file = clas list * class_Main
 
+
+type pargs_type = PArgsType of typ list
+and ptyp = nom_classe * interv * pargs_type
+  
+type pexpr =
+  | PEcst of constant
+  | PEthis
+  | PEnull
+  | PEaccess of left_value
+  | PEaffect of left_value * locd_expr * (pos)
+  | PEcall of left_value * args_type * (locd_expr list)
+  | PEnew  of nom_classe * args_type * (locd_expr list)
+  | PEunop of unop * locd_expr
+  | PEbinop of binop * locd_expr * locd_expr * (pos)
+  | PEif of locd_expr * locd_expr * locd_expr
+  | PEwhile of locd_expr * locd_expr
+  | PEreturn of locd_expr
+  | PEprint of locd_expr
+  | PEbloc of instruction list
+
+and plocd_expr = pexpr * interv
+  
+and pinstruction =
+  | PIdef of pvar
+  | PIexpr of locd_expr
+  
+and pvar = int (* position (décalage) dans la pile *)
+  
+and pleft_value =
+  | PLident of ident * (interv)
+  | PLaccess of locd_expr * ident * (interv)
+  
+type pparam = (ident * typ)
+
+type pparam_type =
+  | PPTsimple  of nom_classe
+  | PPTbigger  of nom_classe * typ (* T >: typ *) (* var x : T *)
+  | PPTsmaller of nom_classe * typ (* T <: typ *)
+
+type pmodifPTC = PModifNone | PModifPlus | PModifMinus
+type pparam_type_class = modifPTC * param_type
+  
+type pmethode = ident * pparam_type list * int * locd_expr (* à peu près *)
+
+type pdecl =
+  | PDvar of pvar
+  | PDmeth of methode
+  
+type pclas = PClass of ident * interv * param_type_class list * param list * (typ * (locd_expr list)) * pdecl list
+
+type pclass_Main = pdecl list
+
+type pfile = pclas list * pclass_Main
+
+
