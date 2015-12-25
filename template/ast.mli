@@ -116,13 +116,13 @@ type pparam_type =
   | PPTsmaller of nom_classe * typ (* T <: typ *)
 
 type pmodifPTC = PModifNone | PModifPlus | PModifMinus
-type pparam_type_class = modifPTC * param_type
+type pparam_type_class = pmodifPTC * pparam_type
   
-type pmethode = ident * pparam_type list * int * locd_expr (* à peu près *)
+type pmethode = ident * param_type list * int * locd_expr (* à peu près *)
 
 type pdecl =
   | PDvar of pvar
-  | PDmeth of methode
+  | PDmeth of pmethode
   
 type pclas = PClass of ident * interv * param_type_class list * param list * (typ * (locd_expr list)) * pdecl list
 

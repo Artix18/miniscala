@@ -52,7 +52,7 @@ and alloc_decl decl ((env:(int Smap.t)), decal) nextL = match decl with
   				  let decal = decal + 8 in
   				  let nEnv = Smap.add ident (-decal) env in
   				  let (rDeco, rMax) = alloc_decl_l nextL (nEnv, decal) in
-  				  PDvar(decal)::rDeco, (max nDecal rMax)
+  				  (PDvar(decal))::rDeco, (max nDecal rMax)
   | Dmeth(methode) -> let (over,ident,ptl,pl,typ,locd_expr,interv) = methode in
   					  let nEnv,nxt=List.fold_left (fun (ev,nxt) (id,_)  -> let nxt = nxt + 8 in (Smap.add id nxt ev, nxt)) (env,8) pl
   					  in
@@ -60,7 +60,7 @@ and alloc_decl decl ((env:(int Smap.t)), decal) nextL = match decl with
   					  let (rDeco, rMax) = alloc_decl_l nextL (env, decal) in
 					  (PDmeth(ident, ptl,fpmax, e))::rDeco, (max rMax fpmax) (*un truc comme ça je pense, peut être sans ptl*)
 let alloc_main dl =
-	alooc_decl_l dl 
+	alloc_decl_l dl (Smap.empty, 0)
 
 let alloc p = 
 	alloc_classes (fst p), alloc_main (snd p)
