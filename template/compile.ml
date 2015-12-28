@@ -4,6 +4,7 @@ open Format
 open Typage
 
 let (genv : (string, unit) Hashtbl.t) = Hashtbl.create 42
+let SZ = 8
 
 let liste_str = ref []
 
@@ -53,26 +54,32 @@ let getPlNames pl =
 
 let getCstVal cst = match cst with
   | Cunit -> imm 0
-  | Cint(res) -> imm res (*sur 64 bits, il va falloir remplacer tous les 8 par des 64 *)
+  | Cint(res) -> imm res (*sur 64 bits, il va falloir remplacer tous les 8 par des 64 -> ah non, pas du tout, my bad *)
   | Cbool(b) -> imm (if b then 1 else 0)
   | Cstring(str) -> liste_str := str::(!liste_str); ilab ("str_"^(string_of_int (List.length (!liste_str))))
 
 let compile_expr exp env = 
 	match fst exp with
 	| Ecst(cst) -> pushq (getCstVal cst)
-    (*| Ethis
-    | Enull
-    | Eaccess of left_value
-    | Eaffect of left_value * locd_expr * (pos)
-    | Ecall of left_value * args_type * (locd_expr list)
-    | Enew  of nom_classe * args_type * (locd_expr list)
-    | Eunop of unop * locd_expr
-    | Ebinop of binop * locd_expr * locd_expr * (pos)
-    | Eif of locd_expr * locd_expr * locd_expr
-    | Ewhile of locd_expr * locd_expr
-    | Ereturn of locd_expr
-    | Eprint of locd_expr
-    | Ebloc of instruction list*)
+    | Ethis -> assert(false)(* ?? on est censé l'avoir en haut de la pile mais cet invariant n'est pas maintenable. TODO *)
+    | Enull -> imm 0
+    | Eaccess(lv) -> match lv with
+    				| Lident(ident,truc) -> if Smap.mem ident env then pushq (ind ~ofs:(Smap.find ident env) rsp) 
+    										else compile_expr Eaccess(Laccess((Ethis, truc), ident, truc)) env
+ 					| Laccess(locd_expr,ident,_) -> 
+ 											(* coucou, TODO, alloue *)
+ 											let code = compile_expr locd_expr env in
+ 											
+    | Eaffect(lv,locd_expr,_) -> assert(false)
+    | Ecall(lv,args_type,lexp_list) -> assert(false)
+    | Enew(lv, nom_classe,args_type,lexp_list) -> assert(false)
+    | Eunop(unop, lexpr) -> assert(false)
+    | Ebinop(binop,lexp1,lexp2,_)-> assert(false)
+    | Eif(lcond,lthen,lelse) -> assert(false)
+    | Ewhile(lexpr, ldo) -> assert(false)
+    | Ereturn(lexpr_ret) -> assert(false)
+    | Eprint(lexpr_print) -> assert(false)
+    (*| Ebloc of instruction list*)
     | _ -> nop
 
 let rec compileDecl_l classe pdecl_l newFun ordreVar debutConstruct = 

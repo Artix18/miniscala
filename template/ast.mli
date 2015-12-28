@@ -1,6 +1,4 @@
 
-(* Arbres de syntaxe abstraite de Mini-Python *)
-
 type pos = Lexing.position
 type interv = pos * pos
 
@@ -96,13 +94,13 @@ type pexpr =
   | PEprint of locd_expr
   | PEbloc of instruction list
 
-and plocd_expr = pexpr * interv
+and plocd_expr = pexpr * ptyp
   
 and pinstruction =
   | PIdef of pvar
   | PIexpr of locd_expr
   
-and pvar = int (* position (décalage) dans la pile *)
+and pvar = bool (* is const *) * ident * (typ option) * locd_expr * (interv)
   
 and pleft_value =
   | PLident of ident * (interv)
@@ -118,7 +116,7 @@ type pparam_type =
 type pmodifPTC = PModifNone | PModifPlus | PModifMinus
 type pparam_type_class = pmodifPTC * pparam_type
   
-type pmethode = ident * param_type list * int * locd_expr (* à peu près *)
+type pmethode = ident * pparam_type list * int * locd_expr (* à peu près *)
 
 type pdecl =
   | PDvar of pvar
