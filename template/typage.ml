@@ -749,7 +749,7 @@ let typeMain   vPC classesDeclarees membresClasse mContraintes methC classe =
         raise (Unicity_error(Printf.sprintf "Class Main should have a function main.", dummy_inter));
     if not (chercheMethMain nMethC classesDeclarees mContraintes) then
         raise (Unicity_error(Printf.sprintf "Class Main should have a function main.", dummy_inter));
-    ()
+    nMethC
 
 let makeBC nom_classe nom_pere classesDeclarees =
     Class(nom_classe, dummy_inter, [], [], (basicType classesDeclarees nom_pere, []), [])
@@ -775,7 +775,7 @@ let typeFichier f =
     let rec typeRecCl vPC curClDecl curMemCl curMethC l = (match l with
     | [] -> typeMain vPC curClDecl curMemCl mContraintes curMethC (snd f)
     | p::q -> let vPC,nCD,nMC,nMethC = type_class vPC curClDecl curMemCl mContraintes curMethC p in typeRecCl vPC nCD nMC nMethC q)
-    in typeRecCl Smap.empty clDecl memCl methC (fst f); ()
+    in typeRecCl Smap.empty clDecl memCl methC (fst f);
 
 (* sigma : T -> vector<bool> vector<vector<bool>, vector2<int>, B> *)
 

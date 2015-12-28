@@ -40,7 +40,7 @@ let () =
     let f = Parser.file Lexer.next_token lb in
     close_in c;
     if !parse_only then exit 0;
-    typeFichier f;
+    let mMeth = typeFichier f in
     print_string "Typage reussi.";
     print_newline();
     if !type_only then exit 0;

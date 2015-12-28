@@ -1,6 +1,7 @@
 open X86_64
 open Ast
 open Format
+open Typage
 
 let (genv : (string, unit) Hashtbl.t) = Hashtbl.create 17
 
@@ -8,11 +9,86 @@ module Smap = Map.Make(String)
 
 type local_env = ident Smap.t
 
+let popn n = addq (imm n) (reg rsp)
+let pushn n = subq (imm n) (reg rsp)
+
 let compile_decl codefun decl =
 	assert(false)
 
-let compile_classes (codefun, codedesc) (Class(ident,_,ptcl,pl,(typ_pere, lexprl),pdecl_l)) = 
-	assert(false)
+let isOver meth = 
+	let over,_,_,_,_,_,_ = meth in
+	over
+
+let getMethName meth = 
+	let _,name,_,_,_,_,_ = meth in
+	name
+
+let estMethDe nom classeId mMeth = 
+	List.exists (fun x -> x = nom) (List.map getMethName (Smap.find classeId mMeth))
+
+let nonOverMeth mMeth ident = 
+	List.map getMethName (List.filter isOver (Smap.find ident mMeth))
+
+(* c'est pas mMeth qu'il faut mais une map avec uniquement les méthodes de la classe et pas celles de ses parents *)
+let rec ajouteMethADesc mMeth (ident:string) idPere (listeMeth:string list) =
+	match listeMeth with
+	| [] -> let l = (nonOverMeth mMeth ident) in l,(List.fold_left (fun m x -> address [("M_"^ident^"_"^x)] ++ m) (nop) l)
+	| a::b -> let lm,c = ajouteMethADesc mMeth ident idPere b in 
+        a::lm, (address ([if estMethDe a ident mMeth then "M_"^ident^"_"^a else "M_"^idPere^"_"^a])) ++ c
+	
+let compileConstruct ident plnames debutTas =
+	(*il me semble que la pile contient directement les args en bas à décal + 16. On sq l'objet est en haut de la pile *)
+	let debutPile = 16 in 
+	let res = 
+		label ("C_"^ident) ++
+        (fst (List.fold_left (fun (c,decal) x -> (movq (ind ~ofs:(debutPile+decal) rbp) (ind ~ofs:(debutTas+decal) rsp)) ++ c, decal+8) (nop, 0) plnames)
+		) ++
+		ret
+	in
+	res
+
+let getPlNames pl =
+	List.map fst pl
+
+let compile_expr exp env = 
+	nop
+
+let rec compileDecl_l classe pdecl_l newFun ordreVar = 
+	assert(false);
+	match pdecl_l with
+	| [] -> newFun, ordreVar
+	| a::b -> compileDecl classe a b newFun ordreVar
+and compileDecl classe decl reste newFun ordreVar = 
+	match decl with
+    | Dvar(var) -> let (_, ident, _, exp, _) = var in
+    				let ordreVar = Smap.add classe (ident::(Smap.find classe ordreVar)) ordreVar in
+    				(* TODO : allouer de la place pour l'expression *)
+    				compile_expr exp (Smap.empty); (*dans quoi mettre ça ?*)
+    				(*TODO : libérer la place *)
+    				compileDecl_l classe reste newFun ordreVar
+    | Dmeth(methode) -> let (_,ident,ptl, pl, _ , expr, _) = methode in
+    					let env,decal = List.fold_left (fun (ev,nxt) x -> Smap.add x nxt ev, nxt+8) (Smap.empty, 16) (getPlNames pl) in
+    					let cexp = compile_expr exp env in
+    					(* TODO compiler la méthode ici *)
+    					compileDecl_l classe reste newFun ordreVar
+	
+let compile_class (codefun, codedesc, mMeth, ordreMeth, ordreVar) (Class(ident,_,ptcl,pl,(typ_pere, lexprl),pdecl_l)) = 
+	let (idPere,_,_)=typ_pere in
+	let lm, cd = (ajouteMethADesc mMeth ident idPere (Smap.find idPere ordreMeth)) in
+	let newDesc = 
+		label ("D_"^ident) ++ address [("D_"^idPere)] ++ cd ++ codedesc
+	in
+	let newOrdreMeth = Smap.add ident lm ordreMeth in
+
+	let lpere = (Smap.find idPere ordreVar) in
+	let plnames = (getPlNames pl) in
+	let ordreVar = Smap.add ident (lpere @ plnames) ordreVar in
+	(*Attention, les vars d'une classe sont allouées sur le tas*)
+	let newFun = (compileConstruct ident plnames (8+(List.length lpere)*8)) in
+	let newFun,ordreVar = compileDecl_l ident pdecl_l newFun ordreVar in
+	let newFun = newFun ++ codefun in
+
+	newFun, newDesc, mMeth, newOrdreMeth, ordreVar
 
 let compileMain classe = 
 	assert(false);
@@ -34,40 +110,8 @@ let compileMain classe =
 	in
 	code
 
-let alloc_class classe = 
-	assert(false)
-
-let alloc_classes cl = 
-	List.map alloc_class cl
-
-let alloc_expr env decal exp = 
-	assert(false)
-
-let rec alloc_decl_l decl_l (env, decal) = match decl_l with
-  | [] -> [],decal
-  | p::q -> alloc_decl p (env, decal) q
-and alloc_decl decl ((env:(int Smap.t)), decal) nextL = match decl with
-  | Dvar(var) -> let (_,ident,_,exp,_) = var in
-  				  let nDecal = alloc_expr env decal exp in
-  				  let decal = decal + 8 in
-  				  let nEnv = Smap.add ident (-decal) env in
-  				  let (rDeco, rMax) = alloc_decl_l nextL (nEnv, decal) in
-  				  (PDvar(decal))::rDeco, (max nDecal rMax)
-  | Dmeth(methode) -> let (over,ident,ptl,pl,typ,locd_expr,interv) = methode in
-  					  let nEnv,nxt=List.fold_left (fun (ev,nxt) (id,_)  -> let nxt = nxt + 8 in (Smap.add id nxt ev, nxt)) (env,8) pl
-  					  in
-  					  let e, fpmax = alloc_expr nEnv 0 locd_expr in
-  					  let (rDeco, rMax) = alloc_decl_l nextL (env, decal) in
-					  (PDmeth(ident, ptl,fpmax, e))::rDeco, (max rMax fpmax) (*un truc comme ça je pense, peut être sans ptl*)
-let alloc_main dl =
-	alloc_decl_l dl (Smap.empty, 0)
-
-let alloc p = 
-	alloc_classes (fst p), alloc_main (snd p)
-
-let compile_program p ofile =
-  let p = alloc p in
-  let codefun, codedesc = List.fold_left compile_classes (nop, nop) (fst p) in
+let compile_program p ofile mMeth =
+  let codefun, codedesc, _, ordreMeth, ordreVar = List.fold_left compile_class (nop, nop, mMeth, Smap.empty, Smap.empty) (fst p) in
   let codemain = compileMain (snd p) in
   let p =
     { text =
