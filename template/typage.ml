@@ -654,7 +654,7 @@ let rec type_class vPC classesDeclarees membresClasse mContraintes methC classe 
     rvMembresClasse := ajouteVarConstruct nom_classe (classParams classe) (!rvMembresClasse);
 
     (*step 4*)
-    let _,arbre4 = type_expr mapVariance vPC newEnv [] newClassesDeclarees membresClasse newMContraintes methC (Enew(tpName, ArgsType(tpList), exp_list),dummy_inter) in
+    let _ = type_expr mapVariance vPC newEnv [] newClassesDeclarees membresClasse newMContraintes methC (Enew(tpName, ArgsType(tpList), exp_list),dummy_inter) in
 
     (*step 5*)
     let curVDecl = ref ((lPAFromPL pList)@(getVarOfCl tpName classesDeclarees membresClasse)) in
@@ -669,7 +669,7 @@ let rec type_class vPC classesDeclarees membresClasse mContraintes methC classe 
                 raise (Unicity_error(Printf.sprintf "Variable \"%s\" already declared in the current class \"%s\" (or its constructor, or its parents)." (varName var) nom_classe, inter));
             curVDecl := (varName var)::(!curVDecl);
 
-            let resTyp,arbre51 = type_expr mapVariance vPC newEnv [] newClassesDeclarees newMembresClasse newMContraintes newMethC (Ebloc([Idef(var); Iexpr(Eaccess(Lident(varName var,dummy_inter)), dummy_inter)]),dummy_inter) in
+            let resTyp = type_expr mapVariance vPC newEnv [] newClassesDeclarees newMembresClasse newMContraintes newMethC (Ebloc([Idef(var); Iexpr(Eaccess(Lident(varName var,dummy_inter)), dummy_inter)]),dummy_inter) in
             
             let nnMCl = ajouteMembre newMembresClasse nom_classe (varName var, varConst var, resTyp) in
             
@@ -744,12 +744,12 @@ let chercheMethMain nMethC classesDeclarees mContraintes =
     List.exists p (Smap.find "Main" nMethC)
 
 let typeMain   vPC classesDeclarees membresClasse mContraintes methC classe =
-    let vPC,nCD,nMC,nMethC, newArbre = type_class vPC classesDeclarees membresClasse mContraintes methC (Class("Main", dummy_inter, [], [], (basicType classesDeclarees "AnyRef", []), classe)) in
+    let vPC,nCD,nMC,nMethC = type_class vPC classesDeclarees membresClasse mContraintes methC (Class("Main", dummy_inter, [], [], (basicType classesDeclarees "AnyRef", []), classe)) in
     if not (Smap.mem "Main" nMethC) then
         raise (Unicity_error(Printf.sprintf "Class Main should have a function main.", dummy_inter));
     if not (chercheMethMain nMethC classesDeclarees mContraintes) then
         raise (Unicity_error(Printf.sprintf "Class Main should have a function main.", dummy_inter));
-    nMethC, [newArbre]
+    nMethC
 
 let makeBC nom_classe nom_pere classesDeclarees =
     Class(nom_classe, dummy_inter, [], [], (basicType classesDeclarees nom_pere, []), [])
@@ -773,8 +773,9 @@ let typeFichier f =
     let memCl = Smap.empty in
     let methC = Smap.empty in
     let rec typeRecCl vPC curClDecl curMemCl curMethC l = (match l with
-    | [] -> typeMain vPC curClDecl curMemCl mContraintes curMethC (snd f)
-    | p::q -> let vPC,nCD,nMC,nMethC,newArbre = type_class vPC curClDecl curMemCl mContraintes curMethC p in 
+    | [] -> ( typeMain vPC curClDecl curMemCl mContraintes curMethC (snd f), [0] )
+    | p::q -> let vPC,nCD,nMC,nMethC = type_class vPC curClDecl curMemCl mContraintes curMethC p in
+              let newArbre = 0 in
     		  let nM, tree_l = typeRecCl vPC nCD nMC nMethC q in nM, newArbre::tree_l)
     in typeRecCl Smap.empty clDecl memCl methC (fst f);
 

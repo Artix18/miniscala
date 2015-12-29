@@ -4,7 +4,7 @@ open Format
 open Typage
 
 let (genv : (string, unit) Hashtbl.t) = Hashtbl.create 42
-let SZ = 8
+let sz = 8
 
 let liste_str = ref []
 
@@ -58,21 +58,25 @@ let getCstVal cst = match cst with
   | Cbool(b) -> imm (if b then 1 else 0)
   | Cstring(str) -> liste_str := str::(!liste_str); ilab ("str_"^(string_of_int (List.length (!liste_str))))
 
-let compile_expr exp env = 
-	match fst exp with
+(* Valeur de retour : 'a ast, le résultat se trouve en haut de pile *)
+let rec compile_expr locd_exp env =
+	match fst locd_exp with
 	| Ecst(cst) -> pushq (getCstVal cst)
     | Ethis -> assert(false)(* ?? on est censé l'avoir en haut de la pile mais cet invariant n'est pas maintenable. TODO *)
-    | Enull -> imm 0
-    | Eaccess(lv) -> match lv with
-    				| Lident(ident,truc) -> if Smap.mem ident env then pushq (ind ~ofs:(Smap.find ident env) rsp) 
-    										else compile_expr Eaccess(Laccess((Ethis, truc), ident, truc)) env
- 					| Laccess(locd_expr,ident,_) -> 
- 											(* coucou, TODO, alloue *)
- 											let code = compile_expr locd_expr env in
- 											
+    | Enull -> pushq (imm 0)
+    | Eaccess(lv) ->
+        (match lv with
+            | Lident(ident,truc) ->
+                if Smap.mem ident env
+                then pushq (ind ~ofs:(Smap.find ident env) rsp)
+	            else compile_expr (Eaccess(Laccess((Ethis, truc), ident, truc)), dummy_inter) env
+            | Laccess(locd_expr,ident,_) -> 
+	            (* coucou, TODO, alloue *)
+	            let code = compile_expr locd_expr env in
+                assert(false))
     | Eaffect(lv,locd_expr,_) -> assert(false)
     | Ecall(lv,args_type,lexp_list) -> assert(false)
-    | Enew(lv, nom_classe,args_type,lexp_list) -> assert(false)
+    | Enew(nom_classe,args_type,lexp_list) -> assert(false) (* Hugo : Pourquoi rajouter une left_value au début ? *)
     | Eunop(unop, lexpr) -> assert(false)
     | Ebinop(binop,lexp1,lexp2,_)-> assert(false)
     | Eif(lcond,lthen,lelse) -> assert(false)
@@ -80,7 +84,7 @@ let compile_expr exp env =
     | Ereturn(lexpr_ret) -> assert(false)
     | Eprint(lexpr_print) -> assert(false)
     (*| Ebloc of instruction list*)
-    | _ -> nop
+    | _ -> assert(false)
 
 let rec compileDecl_l classe pdecl_l newFun ordreVar debutConstruct = 
 	match pdecl_l with
@@ -88,26 +92,28 @@ let rec compileDecl_l classe pdecl_l newFun ordreVar debutConstruct =
 	| a::b -> compileDecl classe a b newFun ordreVar debutConstruct
 and compileDecl classe decl reste newFun ordreVar debutConstruct = 
 	match decl with
-    | Dvar(var) -> let (_, ident, _, expr, _) = var in
-    				let ordreVar = Smap.add classe (ident::(Smap.find classe ordreVar)) ordreVar in
-    				(* TODO : allouer de la place pour l'expression *)
-    				let ce = compile_expr expr (Smap.empty) in (*dans quoi mettre ça ?*) (*le res est en haut de la pile, mettons le dans rbx*)
-    				let debutConstruct = debutConstruct ++ ce ++ popq rbx ++ (movq (reg rbx) (ind ~ofs:(8*(List.length (Smap.find classe ordreVar))) rsp)) in
-    				(*TODO : libérer la place *)
-    				compileDecl_l classe reste newFun ordreVar debutConstruct
-    | Dmeth(methode) -> let (_,ident,ptl, pl, _ , expr, _) = methode in
-    					let env,decal = List.fold_left (fun (ev,nxt) x -> Smap.add x nxt ev, nxt+8) (Smap.empty, 16) (getPlNames pl) in
-    					let fpmax = 42 in (* TODO *)
-                        let ce = compile_expr expr env in
-    					let code = 
-    						label ("M_"^classe^"_"^ident) ++
-    					    pushq (reg rbp) ++
-      						movq (reg rsp) (reg rbp) ++ pushn fpmax ++
-      						ce ++ popq rax ++
-      						popn fpmax ++ popq rbp ++ ret
-      					in
-      					let newFun = newFun ++ code in
-    					compileDecl_l classe reste newFun ordreVar debutConstruct
+    | Dvar(var) ->
+        let (_, ident, _, expr, _) = var in
+	    let ordreVar = Smap.add classe (ident::(Smap.find classe ordreVar)) ordreVar in
+	    (* TODO : allouer de la place pour l'expression *)
+	    let ce = compile_expr expr (Smap.empty) in (*dans quoi mettre ça ?*) (*le res est en haut de la pile, mettons le dans rbx*)
+	    let debutConstruct = debutConstruct ++ ce ++ popq rbx ++ (movq (reg rbx) (ind ~ofs:(8*(List.length (Smap.find classe ordreVar))) rsp)) in
+	    (*TODO : libérer la place *)
+	    compileDecl_l classe reste newFun ordreVar debutConstruct
+    | Dmeth(methode) ->
+        let (_,ident,ptl, pl, _ , expr, _) = methode in
+		let env,decal = List.fold_left (fun (ev,nxt) x -> Smap.add x nxt ev, nxt+8) (Smap.empty, 16) (getPlNames pl) in
+		let fpmax = 42 in (* TODO *)
+        let ce = compile_expr expr env in
+		let code = 
+			label ("M_"^classe^"_"^ident) ++
+		    pushq (reg rbp) ++
+			movq (reg rsp) (reg rbp) ++ pushn fpmax ++
+			ce ++ popq rax ++
+			popn fpmax ++ popq rbp ++ ret
+		in
+		let newFun = newFun ++ code in
+		compileDecl_l classe reste newFun ordreVar debutConstruct
 	
 let compile_class (codefun, codedesc, mMeth, ordreMeth, ordreVar) (Class(ident,_,ptcl,pl,(typ_pere, lexprl),pdecl_l)) = 
 	let (idPere,_,_)=typ_pere in

@@ -82,23 +82,23 @@ type pexpr =
   | PEcst of constant
   | PEthis
   | PEnull
-  | PEaccess of left_value
-  | PEaffect of left_value * locd_expr * (pos)
-  | PEcall of left_value * args_type * (locd_expr list)
-  | PEnew  of nom_classe * args_type * (locd_expr list)
-  | PEunop of unop * locd_expr
-  | PEbinop of binop * locd_expr * locd_expr * (pos)
-  | PEif of locd_expr * locd_expr * locd_expr
-  | PEwhile of locd_expr * locd_expr
-  | PEreturn of locd_expr
-  | PEprint of locd_expr
-  | PEbloc of instruction list
+  | PEaccess of pleft_value
+  | PEaffect of pleft_value * plocd_expr * (pos)
+  | PEcall of pleft_value * pargs_type * (plocd_expr list)
+  | PEnew  of nom_classe * pargs_type * (plocd_expr list)
+  | PEunop of unop * plocd_expr
+  | PEbinop of binop * plocd_expr * plocd_expr * (pos)
+  | PEif of plocd_expr * plocd_expr * plocd_expr
+  | PEwhile of plocd_expr * plocd_expr
+  | PEreturn of plocd_expr
+  | PEprint of plocd_expr
+  | PEbloc of pinstruction list
 
 and plocd_expr = pexpr * ptyp
   
 and pinstruction =
   | PIdef of pvar
-  | PIexpr of locd_expr
+  | PIexpr of plocd_expr
   
 and pvar = bool (* is const *) * ident * (typ option) * locd_expr * (interv)
   
