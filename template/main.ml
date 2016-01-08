@@ -5,6 +5,7 @@ open Format
 open Lexing
 open Parser
 open Typage
+open Compile
 
 let usage = "usage: mini-scala [options] file.scala"
 
@@ -40,11 +41,11 @@ let () =
     let f = Parser.file Lexer.next_token lb in
     close_in c;
     if !parse_only then exit 0;
-    let mMeth = typeFichier f in
+    let mMeth,cmain = typeFichier f in
     print_string "Typage reussi.";
     print_newline();
     if !type_only then exit 0;
-    assert(false)
+    compile_program f "lol.s" mMeth cmain
   with
     | Lexer.Lexing_error s ->
 	    report (lexeme_start_p lb, lexeme_end_p lb);

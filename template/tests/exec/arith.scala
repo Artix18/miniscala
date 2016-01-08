@@ -1,4 +1,3 @@
-
 object Main {
   def main(args: Array[String]) {
     print(1 + 2 * 3); print("\n");

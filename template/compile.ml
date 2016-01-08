@@ -38,7 +38,7 @@ let rec ajouteMethADesc mMeth (ident:string) idPere (listeMeth:string list) =
 	| [] -> let l = (nonOverMeth mMeth ident) in l,(List.fold_left (fun m x -> address [("M_"^ident^"_"^x)] ++ m) (nop) l)
 	| a::b -> let lm,c = ajouteMethADesc mMeth ident idPere b in 
         a::lm, (address ([if estMethDe a ident mMeth then "M_"^ident^"_"^a else "M_"^idPere^"_"^a])) ++ c
-	
+
 let compileConstruct ident plnames debutTas =
 	(*il me semble que la pile contient directement les args en bas à décal + 16. On sq l'objet est en haut de la pile *)
 	let debutPile = 16 in 
@@ -78,12 +78,72 @@ let rec compile_expr locd_exp env =
     | Ecall(lv,args_type,lexp_list) -> assert(false)
     | Enew(nom_classe,args_type,lexp_list) -> assert(false) (* Hugo : Pourquoi rajouter une left_value au début ? *)
     | Eunop(unop, lexpr) -> assert(false)
-    | Ebinop(binop,lexp1,lexp2,_)-> assert(false)
-    | Eif(lcond,lthen,lelse) -> assert(false)
-    | Ewhile(lexpr, ldo) -> assert(false)
+    | Ebinop(binop,lexp1,lexp2,_)-> let v1 = compile_expr lexp1 env in let v2 = compile_expr lexp2 env in
+                                    let code = (v1 ++ v2 ++ popq rax ++ popq rbx ++ (
+                                        match binop with
+                                        | Badd -> addq (reg rbx) (reg rax)
+                                        | Bsub -> subq (reg rbx) (reg rax)
+                                        | Bmul -> imulq (reg rbx) (reg rax)
+                                        | Bdiv -> cqto ++ idivq (reg rbx)
+                                        | Bmod -> cqto ++ idivq (reg rbx) ++ movq (reg rdx) (reg rax)
+                                        | Beq  -> subq (reg rbx) (reg rax) ++ sete (reg bl) ++ movzbq (reg bl) rax
+                                        | Bneq -> subq (reg rbx) (reg rax) ++ setne (reg bl) ++ movzbq (reg bl) rax
+                                        | Blt 
+                                        | Ble
+                                        | _ -> nop
+                                        )
+                                        ++ pushq (reg rax))
+                                    in
+                                    code
+    | Eif(lcond,lthen,lelse) -> let ccond = compile_expr lcond env in let cthen = compile_expr lthen env in let celse = compile_expr lelse env in
+                                let code = 
+                                    ccond ++
+                                    popq rax ++
+                                    movq (imm 1) (reg rbx) ++
+                                    testq (reg rax) (reg rbx) ++
+                                    je "else_lol" ++
+                                    cthen ++
+                                    jmp "end_lol" ++
+                                    label "else_lol" ++
+                                    celse ++
+                                    label "end_lol"
+                                in
+                                code
+    | Ewhile(lexpr, ldo) -> let ccond = compile_expr lexpr env in let cdo = compile_expr ldo env in
+                            let code =
+                                ccond ++
+                                popq rax ++
+                                movq (imm 1) (reg rbx) ++
+                                testq (reg rax) (reg rbx) ++
+                                je "end_while" ++
+                                label "cond_while" ++
+                                ccond ++
+                                cdo ++
+                                popq rax ++
+                                popq rax ++
+                                movq (imm 1) (reg rbx) ++
+                                testq (reg rax) (reg rbx) ++
+                                jne "cond_while" ++
+                                label "end_while" ++
+                                pushq (imm 0)
+                            in
+                            code
     | Ereturn(lexpr_ret) -> assert(false)
-    | Eprint(lexpr_print) -> assert(false)
-    (*| Ebloc of instruction list*)
+    | Eprint(lexpr_print) -> let res = compile_expr lexpr_print env in
+                             let code =
+                                (* pushn place *)
+                                res ++
+                                popq rdi ++
+                                (* popn place *)
+                                call "print_int" ++
+                                pushq (imm 0) (* unit *)
+                             in
+                             code
+    | Ebloc(instruction_list) ->
+        match instruction_list with
+        | [] -> pushq (imm 0)
+        | [Iexpr e] -> compile_expr e env
+        | _ -> nop
     | _ -> assert(false)
 
 let rec compileDecl_l classe pdecl_l newFun ordreVar debutConstruct = 
@@ -114,9 +174,17 @@ and compileDecl classe decl reste newFun ordreVar debutConstruct =
 		in
 		let newFun = newFun ++ code in
 		compileDecl_l classe reste newFun ordreVar debutConstruct
+
+let normalise map id = 
+    if Smap.mem id map then map
+    else
+    Smap.add id [] map
 	
 let compile_class (codefun, codedesc, mMeth, ordreMeth, ordreVar) (Class(ident,_,ptcl,pl,(typ_pere, lexprl),pdecl_l)) = 
 	let (idPere,_,_)=typ_pere in
+	let ordreMeth = normalise ordreMeth idPere in
+	let ordreVar = normalise ordreVar idPere in
+
 	let lm, cd = (ajouteMethADesc mMeth ident idPere (Smap.find idPere ordreMeth)) in
 	let newDesc = 
 		label ("D_"^ident) ++ address [("D_"^idPere)] ++ cd ++ codedesc
@@ -134,34 +202,39 @@ let compile_class (codefun, codedesc, mMeth, ordreMeth, ordreVar) (Class(ident,_
 	newFun, newDesc, mMeth, newOrdreMeth, ordreVar
 
 let compileMain classe = 
-	assert(false);
 	let code = 
 		movq (reg rsp) (reg rbp) ++
         (* TODO : allouer objet de classe Main et appeler main() *)
+        movq (imm 40) (reg rdi) ++
+        call "malloc" ++
+        movq (reg rax) (reg r12) ++
+        movq (ilab "D_Main") (ind ~ofs:0 r12) ++
+        pushq (reg r12) ++
+        call "M_Main_main" ++
+        popq r12 ++
         movq (imm 0) (reg rax) ++ (* exit *)
-        ret ++
-        label "C_Main" ++
+        ret
+        (*label "C_Main" ++
         (*constructeur classe main, genre, ret ?*)
         ret ++
         label "M_Main_main" ++
         pushq (reg rbp) ++
 		movq (reg rsp) (reg rbp) ++
 		movq (ind ~ofs:16 rbp) (reg rax) ++
-		(* mettre la fonction ici *)
+        (* TODO *)
 		popq rbp ++
-        ret
+        ret*)
 	in
 	code
 
-let compile_program p ofile mMeth =
-  let codefun, codedesc, _, ordreMeth, ordreVar = List.fold_left compile_class (nop, nop, mMeth, Smap.empty, Smap.empty) (fst p) in
+let compile_program p ofile mMeth cmain =
+  let codefun, codedesc, _, ordreMeth, ordreVar = List.fold_left compile_class (nop, nop, mMeth, Smap.empty, Smap.empty) (cmain::(fst p)) in
   let codemain = compileMain (snd p) in
   let p =
     { text =
         glabel "main" ++
         codemain++
-        (* codemain contient aussi les trucs de la classe main *)
-
+        (* codemain contient aussi les trucs de la classe main *) 
         label "print_int" ++
         movq (reg rdi) (reg rsi) ++
         movq (ilab ".Sprint_int") (reg rdi) ++
@@ -181,6 +254,7 @@ let compile_program p ofile mMeth =
         fst (List.fold_left (fun (code,nb) x -> label ("str_"^(string_of_int nb)) ++ string x ++ code, nb-1)
         ((label ".Sprint_int" ++ string "%d\n" ++ label ".Sprint_string" ++ string "%s\n"),(List.length (!liste_str))) (!liste_str))
           ++ codedesc
+          ++ (label "D_AnyRef")
     }
   in
   let f = open_out ofile in

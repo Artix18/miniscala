@@ -600,7 +600,7 @@ let checkOver methode nom_classe newMethC nnCD nnMCT =
     checkOverArgs methode methPere nom_classe nnCD nnMCT sigmaNom;
     checkOverRt     methode methPere nom_classe nnCD nnMCT sigmaNom
 
-let rec type_class vPC classesDeclarees membresClasse mContraintes methC classe = 
+let rec type_class vPC classesDeclarees membresClasse mContraintes methC classe methCSansP = 
     let Class(nom_classe,inter,listePTC,pList,(typPere, exp_list),liste_decl) = classe in
     
     if Smap.mem nom_classe classesDeclarees then
@@ -609,6 +609,7 @@ let rec type_class vPC classesDeclarees membresClasse mContraintes methC classe 
     let rvCd = ref classesDeclarees in
     let rvMembresClasse = ref membresClasse in
     let rvMethC = ref methC in
+    let rvMethCSansParent = ref methCSansP in
     let listeT = getListeParamsTypeFromClass classe in
     
     let listeVariance = List.map fst listePTC in
@@ -698,6 +699,7 @@ let rec type_class vPC classesDeclarees membresClasse mContraintes methC classe 
             
             let nnMethC = ajouteMethode nom_classe methode newMethC in
             rvMethC := ajouteMethode nom_classe methode (!rvMethC);
+            rvMethCSansParent := ajouteMethode nom_classe methode (!rvMethCSansParent);
             
             let s_t = (type_expr mapVariance vPC nnEnv [] nnCD newMembresClasse nnMCT nnMethC locd_expr) in
             if not (sousType nnCD nnMCT s_t typRet)
@@ -718,7 +720,7 @@ let rec type_class vPC classesDeclarees membresClasse mContraintes methC classe 
             (newClassesDeclarees, newMembresClasse, newMContraintes, nnMethC)
     in
     let _ = List.fold_left type_decl (newClassesDeclarees, membresClasse, newMContraintes, methC) liste_decl in
-    (Smap.add nom_classe listeVariance vPC,!rvCd, !rvMembresClasse, !rvMethC)
+    (Smap.add nom_classe listeVariance vPC,!rvCd, !rvMembresClasse, !rvMethC, !rvMethCSansParent)
 
 let verifMainValide meth classesDeclarees mContraintes =
     let (_,ident,ptl,pl,rv,_,inter) = meth in
@@ -743,13 +745,14 @@ let chercheMethMain nMethC classesDeclarees mContraintes =
     in
     List.exists p (Smap.find "Main" nMethC)
 
-let typeMain   vPC classesDeclarees membresClasse mContraintes methC classe =
-    let vPC,nCD,nMC,nMethC = type_class vPC classesDeclarees membresClasse mContraintes methC (Class("Main", dummy_inter, [], [], (basicType classesDeclarees "AnyRef", []), classe)) in
+let typeMain   vPC classesDeclarees membresClasse mContraintes methC classe methCSansP =
+    let cmain = (Class("Main", dummy_inter, [], [], (basicType classesDeclarees "AnyRef", []), classe)) in
+    let vPC,nCD,nMC,nMethC, nMethCSansP = type_class vPC classesDeclarees membresClasse mContraintes methC cmain methCSansP in
     if not (Smap.mem "Main" nMethC) then
         raise (Unicity_error(Printf.sprintf "Class Main should have a function main.", dummy_inter));
     if not (chercheMethMain nMethC classesDeclarees mContraintes) then
         raise (Unicity_error(Printf.sprintf "Class Main should have a function main.", dummy_inter));
-    nMethC
+    nMethCSansP, cmain
 
 let makeBC nom_classe nom_pere classesDeclarees =
     Class(nom_classe, dummy_inter, [], [], (basicType classesDeclarees nom_pere, []), [])
@@ -772,12 +775,13 @@ let typeFichier f =
     let clDecl = getDefaultCl in
     let memCl = Smap.empty in
     let methC = Smap.empty in
-    let rec typeRecCl vPC curClDecl curMemCl curMethC l = (match l with
-    | [] -> ( typeMain vPC curClDecl curMemCl mContraintes curMethC (snd f), [0] )
-    | p::q -> let vPC,nCD,nMC,nMethC = type_class vPC curClDecl curMemCl mContraintes curMethC p in
+    let methCSansP = Smap.empty in
+    let rec typeRecCl vPC curClDecl curMemCl curMethC methCSansP l = (match l with
+    | [] -> ( typeMain vPC curClDecl curMemCl mContraintes curMethC (snd f) methCSansP, [0] )
+    | p::q -> let vPC,nCD,nMC,nMethC,nMethCSansP = type_class vPC curClDecl curMemCl mContraintes curMethC p methCSansP in
               let newArbre = 0 in
-    		  let nM, tree_l = typeRecCl vPC nCD nMC nMethC q in nM, newArbre::tree_l)
-    in typeRecCl Smap.empty clDecl memCl methC (fst f);
+    		  let nM, tree_l = typeRecCl vPC nCD nMC nMethC nMethCSansP q in nM, newArbre::tree_l)
+    in fst (typeRecCl Smap.empty clDecl memCl methC methCSansP (fst f));
 
 (* sigma : T -> vector<bool> vector<vector<bool>, vector2<int>, B> *)
 
