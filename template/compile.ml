@@ -197,7 +197,7 @@ let compile_class (codefun, codedesc, mMeth, ordreMeth, ordreVar) (Class(ident,_
 	(*Attention, les vars d'une classe sont allouées sur le tas*)
 	let debutConstruct = (compileConstruct ident plnames (8+(List.length lpere)*8)) in
     let newFun,ordreVar,constructFini = compileDecl_l ident pdecl_l codefun ordreVar debutConstruct in
-	let newFun = constructFini ++ ret ++ newFun ++ codefun in
+	let newFun = constructFini ++ ret ++ newFun in
 
 	newFun, newDesc, mMeth, newOrdreMeth, ordreVar
 
