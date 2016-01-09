@@ -234,63 +234,63 @@ let rec            type_expr mapVariance vPC env loc_var classesDeclarees membre
     let estBF    = bienForme      classesDeclarees mContraintes in
     let realBasicType = basicType classesDeclarees in
     match fst loc_expr with
-    | Ecst(cst) -> realBasicType (match cst with
+    | Ecst(cst) -> PEcst(cst), realBasicType (match cst with
                                 | Cunit      -> "Unit"
                                 | Cint(a)    -> "Int"
                                 | Cbool(b)   -> "Boolean"
                                 | Cstring(s) -> "String"
                             )
-    | Ethis -> fst (Smap.find "this" env)
-    | Enull -> realBasicType "Null"
+    | Ethis -> PEthis, fst (Smap.find "this" env)
+    | Enull -> PEnull, realBasicType "Null"
     | Eaccess(lv) -> (match lv with
         | Lident(id, inter) ->
             if Smap.mem id env
-            then fst (Smap.find id env)
+            then PEaccess(PLident(id)), fst (Smap.find id env)
             else appRec (Eaccess(Laccess((Ethis,inter), id, inter)), inter)
         | Laccess(ex, x, inter) ->
-            let typeDeEx = appRec ex in 
-            let (nom_classe,b,ArgsType(listeTypePar)) = typeDeEx in
+            let pexp, te = appRec ex in
+            let (nom_classe,b,ArgsType(listeTypePar)) = te in
             if possedeMembre nom_classe x membresClasse then (
                 let typeAbsX = fst (getTypeAbstrait nom_classe x membresClasse) in (*nom_classe.x*)
-                remplaceType typeAbsX (construitSigma nom_classe listeTypePar classesDeclarees)
+                PEaccess(PLaccess((pexp, te),x)), (remplaceType typeAbsX (construitSigma nom_classe listeTypePar classesDeclarees))
             )
             else raise (Unbound_error (Printf.sprintf "Class %s has no field named %s." nom_classe x, inter))
         )
     | Eaffect(Lident (id, inter), e, pos) when not (Smap.mem id env) -> appRec (Eaffect(Laccess((Ethis,inter), id, inter),e,pos), inter)
-    | Eaffect(lv,e,pos) -> let t1 = (match lv with
+    | Eaffect(lv,e,pos) -> let plv, t1 = (match lv with
         | Lident (id, inter)      ->
             let (ty,isConst) = Smap.find id env in
             if isConst then raise (Type_error (Printf.sprintf "Local value %s is constant." id, inter))
-            else ty
+            else PLident(id), ty
         | Laccess(ex, x, inter) ->
-            let typeDeEx = appRec ex in 
+            let pexp, typeDeEx = appRec ex in 
             let (nom_classe,b,ArgsType(listeTypePar)) = typeDeEx in
             if possedeMembre nom_classe x membresClasse then (
                 let (typeAbsX, isConst) = getTypeAbstrait nom_classe x membresClasse in
                 if isConst then raise (Type_error (Printf.sprintf "Field %s.%s is constant." nom_classe x, inter))
-                else remplaceType typeAbsX (construitSigma nom_classe listeTypePar classesDeclarees)
+                else PLaccess((pexp,typeDeEx),x), (remplaceType typeAbsX (construitSigma nom_classe listeTypePar classesDeclarees))
             )
             else raise (Unbound_error (Printf.sprintf "Class %s has no field named %s." nom_classe x, inter))
         ) in 
         (* let t1 = appRec (Eaccess(lv), (fst (snd loc_expr), pos)) in *)
-        let t2 = appRec e in
-        if estSousType t2 t1 then realBasicType "Unit"
+        let pexp, t2 = appRec e in
+        if estSousType t2 t1 then PEaffect(plv, (pexp,t2)), (realBasicType "Unit")
         else raise (Type_error ((Printf.sprintf "This expression has type %a, but was expected to be castable to %a." typeDisplay t2 typeDisplay t1), snd e))
         
     | Eunop(unop, expr) ->
-        let t = appRec expr in
-        (match unop with
+        let pexp, t = appRec expr in
+        PEunop(unop, (pexp,t)), (match unop with
             | Uneg -> if estEqTypes t (realBasicType "Int") then t
                       else raise (Type_error ((Printf.sprintf "This expression has type %a, but was expected to be Int." typeDisplay t), snd expr))
             | Unot -> if estEqTypes t (realBasicType "Boolean") then t
                       else raise (Type_error ((Printf.sprintf "This expression has type %a, but was expected to be Boolean." typeDisplay t), snd expr))
         )
     | Ebinop(binop, e1, e2, pos) ->
-        let t1 = appRec e1 in
-        let t2 = appRec e2 in
+        let pe1,t1 = appRec e1 in
+        let pe2,t2 = appRec e2 in
         let tBool = (realBasicType "Boolean") in
         let tInt = (realBasicType "Int") in
-        (match binop with
+        PEbinop(binop, (pe1,t1), (pe2,t2)), (match binop with
         | Beqphy|Bneqphy ->
             if estSousType t1 (realBasicType "AnyRef")
             && estSousType t2 (realBasicType "AnyRef")
@@ -313,45 +313,45 @@ let rec            type_expr mapVariance vPC env loc_var classesDeclarees membre
             else raise (Type_error (Printf.sprintf "These expressions have types %a and %a, but were expected to be Bool." typeDisplay t1 typeDisplay t2, (fst(snd e1),snd(snd e2))))
         )
     | Eprint (exp) ->
-        let t = appRec exp in
+        let pexp, t = appRec exp in
         if estEqTypes t (realBasicType "Int")
         || estEqTypes t (realBasicType "String")
-        then (realBasicType "Unit")
+        then PEprint(pexp,t), (realBasicType "Unit")
         else raise (Type_error ((Printf.sprintf "This expression has type %a, but was expected to be Int or String." typeDisplay t), snd exp))
     | Eif (e_cond, e_then, e_else) ->
-        let t1 = appRec e_cond in
+        let pe1,t1 = appRec e_cond in
         if not (estEqTypes t1 (realBasicType "Boolean"))
             then raise (Type_error ((Printf.sprintf "This expression has type %a, but was expected to be Boolean." typeDisplay t1), snd e_cond)) else
-        let t2 = appRec e_then in
-        let t3 = appRec e_else in
+        let pe2,t2 = appRec e_then in
+        let pe3,t3 = appRec e_else in
         if (estSousType t2 t3  || estSousType t3 t2)
-        then ( if estSousType t2 t3 then t3 else t2 )
+        then (PEif((pe1,t1),(pe2,t2),(pe3,t3))), ( if estSousType t2 t3 then t3 else t2 )
         else if fst e_else == Ecst Cunit
             then raise (Type_error ((Printf.sprintf "This expression has type %a, but was expected to be Unit." typeDisplay t2), snd e_then))
             else raise (Type_error ((Printf.sprintf "These expressions have incompatible types %a and %a." typeDisplay t2 typeDisplay t3), (fst(snd e_then),snd(snd e_else)) ))
     | Ewhile(e_cond, e_corps) ->
-        let t = appRec e_cond in
-        let _ = appRec e_corps in
-        if estEqTypes t (realBasicType "Boolean")
-        then realBasicType "Unit"
-        else raise (Type_error ((Printf.sprintf "This expression has type %a, but was expected to be Boolean." typeDisplay t), snd e_cond))
+        let pe_cond,  t_cond  = appRec e_cond  in
+        let pe_corps, t_corps = appRec e_corps in
+        if estEqTypes t_cond (realBasicType "Boolean")
+        then (PEwhile ((pe_cond,  t_cond), (pe_corps, t_corps))),(realBasicType "Unit")
+        else raise (Type_error ((Printf.sprintf "This expression has type %a, but was expected to be Boolean." typeDisplay t_cond), snd e_cond))
     | Enew(nom_classe,ArgsType(args_type),(liste_locd_expr)) ->
         if nom_classe = "Main" then 
             raise (Unicity_error(Printf.sprintf "Illegal instanciation of class Main.", snd loc_expr));
         estBF (nom_classe, snd loc_expr,ArgsType(args_type));
         let mSigma = construitSigma nom_classe args_type classesDeclarees in
         let Class (nom_classe,_, typesParamTheo, paramTheo, _,_) = Smap.find nom_classe classesDeclarees in
-        let checkType e y =
-            let t1 = appRec e in
+        let fold_typd_expr e y pe_l =
+            let pe, t1 = appRec e in
             let t2 = (remplaceType (snd y) mSigma) in
             if not (estSousType t1 t2)
             then raise (Type_error ((Printf.sprintf "This expression has type %a, but was expected to be castable to %a." typeDisplay t1 typeDisplay t2), snd e))
+            else (pe, t1) :: pe_l
         in if (List.length liste_locd_expr <> List.length paramTheo)
         then raise (Param_error ((Printf.sprintf "Class %s's constructor expects %d parameters, but was given %d" nom_classe (List.length paramTheo) (List.length liste_locd_expr)), snd loc_expr))
         else
-            List.iter2 checkType liste_locd_expr paramTheo;
-            (nom_classe, snd loc_expr,ArgsType(args_type))
-    | Ecall(lv,ArgsType(args_type),liste_expr) ->
+            PEnew((nom_classe, dummy_inter, ArgsType(args_type)), List.fold_right2 fold_typd_expr liste_locd_expr paramTheo []), (nom_classe, snd loc_expr,ArgsType(args_type))
+    | Ecall(lv,ArgsType(args_type),liste_expr) -> assert(false);(*
 
         (*(try
         let tClasse = appRec (Eaccess(lv), snd loc_expr) in ()
@@ -380,15 +380,16 @@ let rec            type_expr mapVariance vPC env loc_var classesDeclarees membre
         List.iter2 checkSousTypage liste_expr tPar;
         remplaceType rv compo
         )
-        
-    | Ereturn(exp) ->
+        *)
+    | Ereturn(exp) -> assert(false);(*
         if not (Smap.mem "return" env) then raise (Return_error ((Printf.sprintf "Use of return outside of a method."), snd loc_expr));
         let rt = fst (Smap.find "return" env) in
         let t = appRec exp in
         if estSousType t rt
         then realBasicType "Nothing"
         else raise (Type_error ((Printf.sprintf "This expression has type %a, but was expected to be castable to %a." typeDisplay t typeDisplay rt), snd exp))
-    | Ebloc(liste_instruction) ->
+        *)
+    | Ebloc(liste_instruction) -> assert(false)(*
         (match liste_instruction with
             | []        -> (realBasicType "Unit")
             | [Iexpr e] -> (appRec e)
@@ -413,7 +414,7 @@ let rec            type_expr mapVariance vPC env loc_var classesDeclarees membre
                     checkVariance vPC mapVariance (if isCst then ModifPlus else ModifNone) typeFinal;
                     Smap.add name (typeFinal, isCst) env
                           ) (!nextLV) classesDeclarees membresClasse mContraintes methC (Ebloc (q), (!nextPo, snd (snd loc_expr)))
-        )
+        )*)
    
 let varName var = 
     let (_,name,_,_,_)=var in

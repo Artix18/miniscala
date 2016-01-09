@@ -78,8 +78,8 @@ type file = clas list * class_Main
 
 (* Retour de typage *)
 
-type pargs_type = PArgsType of ptyp list
-and ptyp = nom_classe * pargs_type
+type pargs_type = args_type
+type ptyp = typ
   
 type pexpr =
   | PEcst of constant
@@ -88,7 +88,7 @@ type pexpr =
   | PEaccess of pleft_value
   | PEaffect of pleft_value * typd_expr
   | PEcall of pleft_value * pargs_type * (typd_expr list)
-  | PEnew  of nom_classe * pargs_type * (typd_expr list)
+  | PEnew  of ptyp * (typd_expr list)
   | PEunop of unop * typd_expr
   | PEbinop of binop * typd_expr * typd_expr
   | PEif of typd_expr * typd_expr * typd_expr
