@@ -76,7 +76,18 @@ let rec compile_expr locd_exp env =
                 assert(false))
     | Eaffect(lv,locd_expr,_) -> assert(false)
     | Ecall(lv,args_type,lexp_list) -> assert(false)
-    | Enew(nom_classe,args_type,lexp_list) -> assert(false) (* Hugo : Pourquoi rajouter une left_value au début ? *)
+    | Enew(nom_classe,args_type,lexp_list) -> let lcode = List.map (fun x -> compile_expr x env) lexp_list in
+                                              let code = 
+                                                (* TODO la taille de la classe *)
+                                                movq (imm 40) (reg rdi) ++
+                                                call "malloc" ++
+                                                pushq (reg rax) ++
+                                                (List.fold_left (fun c x -> c ++ x) (nop) lcode) ++
+                                                call ("C_"^nom_classe) ++
+                                                (List.fold_left (fun c x -> c ++ popq rax) (nop) lcode)
+                                                (* pas le dernier pop *)
+                                              in
+                                              code
     | Eunop(unop, lexpr) -> assert(false)
     | Ebinop(binop,lexp1,lexp2,_)-> let v1 = compile_expr lexp1 env in let v2 = compile_expr lexp2 env in
                                     let code = (v1 ++ v2 ++ popq rax ++ popq rbx ++ (
@@ -143,7 +154,16 @@ let rec compile_expr locd_exp env =
         match instruction_list with
         | [] -> pushq (imm 0)
         | [Iexpr e] -> compile_expr e env
-        | _ -> nop
+        | bidule::reste -> let c2 = compile_expr (Ebloc(reste), dummy_inter) env in (*normalement c pas env *)
+                           let code = 
+                             (match bidule with
+                             | Idef(var) -> assert(false)
+                             | Iexpr(locd_expr) -> let cc = compile_expr locd_expr env in cc) ++
+                             popq rax ++
+                             c2
+                           in
+                           code
+        | _ -> pushq (imm 0)
     | _ -> assert(false)
 
 let rec compileDecl_l classe pdecl_l newFun ordreVar debutConstruct = 
