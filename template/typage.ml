@@ -2,7 +2,6 @@ open Ast
 open Parser
 open Lexing
 open Printf
-open Past
 
 module Smap = Map.Make(String)
 type env = (typ * bool) Smap.t (* string = ident, isConst *)
@@ -235,18 +234,18 @@ let rec            type_expr mapVariance vPC env loc_var classesDeclarees membre
     let estBF    = bienForme      classesDeclarees mContraintes in
     let realBasicType = basicType classesDeclarees in
     match fst loc_expr with
-    | Ecst(cst) -> Ecst(cst), (realBasicType (match cst with
+    | Ecst(cst) -> realBasicType (match cst with
                                 | Cunit      -> "Unit"
                                 | Cint(a)    -> "Int"
                                 | Cbool(b)   -> "Boolean"
                                 | Cstring(s) -> "String"
-                            ))
-    | Ethis -> Ethis, fst (Smap.find "this" env)
-    | Enull -> Enull, realBasicType "Null"
+                            )
+    | Ethis -> fst (Smap.find "this" env)
+    | Enull -> realBasicType "Null"
     | Eaccess(lv) -> (match lv with
         | Lident(id, inter) ->
             if Smap.mem id env
-            then Lident(id, inter), fst (Smap.find id env)
+            then fst (Smap.find id env)
             else appRec (Eaccess(Laccess((Ethis,inter), id, inter)), inter)
         | Laccess(ex, x, inter) ->
             let typeDeEx = appRec ex in 
