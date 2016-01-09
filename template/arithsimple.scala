@@ -14,7 +14,7 @@ class Mdr extends Lol
 
 object Main {
   def main(args: Array[String]) {
-    while(false) print(42);
+    while(1+1==2) print(42);
     new Mdr();
     print(1)
   }

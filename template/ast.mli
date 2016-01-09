@@ -75,54 +75,49 @@ type class_Main = decl list
 type file = clas list * class_Main
 
 
-type pargs_type = PArgsType of typ list
-and ptyp = nom_classe * interv * pargs_type
+
+(* Retour de typage *)
+
+type pargs_type = PArgsType of ptyp list
+and ptyp = nom_classe * pargs_type
   
 type pexpr =
   | PEcst of constant
   | PEthis
   | PEnull
   | PEaccess of pleft_value
-  | PEaffect of pleft_value * plocd_expr * (pos)
-  | PEcall of pleft_value * pargs_type * (plocd_expr list)
-  | PEnew  of nom_classe * pargs_type * (plocd_expr list)
-  | PEunop of unop * plocd_expr
-  | PEbinop of binop * plocd_expr * plocd_expr * (pos)
-  | PEif of plocd_expr * plocd_expr * plocd_expr
-  | PEwhile of plocd_expr * plocd_expr
-  | PEreturn of plocd_expr
-  | PEprint of plocd_expr
+  | PEaffect of pleft_value * typd_expr
+  | PEcall of pleft_value * pargs_type * (typd_expr list)
+  | PEnew  of nom_classe * pargs_type * (typd_expr list)
+  | PEunop of unop * typd_expr
+  | PEbinop of binop * typd_expr * typd_expr
+  | PEif of typd_expr * typd_expr * typd_expr
+  | PEwhile of typd_expr * typd_expr
+  | PEreturn of typd_expr
+  | PEprint of typd_expr
   | PEbloc of pinstruction list
 
-and plocd_expr = pexpr * ptyp
+and typd_expr = pexpr * ptyp
   
 and pinstruction =
   | PIdef of pvar
-  | PIexpr of plocd_expr
+  | PIexpr of typd_expr
   
-and pvar = bool (* is const *) * ident * (typ option) * locd_expr * (interv)
+and pvar = ident * ptyp * expr
   
 and pleft_value =
-  | PLident of ident * (interv)
-  | PLaccess of locd_expr * ident * (interv)
+  | PLident of ident
+  | PLaccess of typd_expr * ident
   
-type pparam = (ident * typ)
-
-type pparam_type =
-  | PPTsimple  of nom_classe
-  | PPTbigger  of nom_classe * typ (* T >: typ *) (* var x : T *)
-  | PPTsmaller of nom_classe * typ (* T <: typ *)
-
-type pmodifPTC = PModifNone | PModifPlus | PModifMinus
-type pparam_type_class = pmodifPTC * pparam_type
+type pparam = (ident * ptyp)
   
-type pmethode = ident * pparam_type list * int * locd_expr (* à peu près *)
+type pmethode = ident * pparam list * typd_expr
 
 type pdecl =
   | PDvar of pvar
   | PDmeth of pmethode
   
-type pclas = PClass of ident * interv * param_type_class list * param list * (typ * (locd_expr list)) * pdecl list
+type pclas = PClass of ident * pparam list * (ptyp * (typd_expr list)) * pdecl list
 
 type pclass_Main = pdecl list
 
