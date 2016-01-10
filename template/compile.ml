@@ -15,6 +15,10 @@ type local_env = ident Smap.t
 let popn n = addq (imm n) (reg rsp)
 let pushn n = subq (imm n) (reg rsp)
 
+let super_compteur = ref 0
+
+let dummy_typ = ("dummy", dummy_inter, ArgsType([]))
+
 let compile_decl codefun decl =
 	assert(false)
 
@@ -39,34 +43,45 @@ let rec ajouteMethADesc mMeth (ident:string) idPere (listeMeth:string list) =
 	| a::b -> let lm,c = ajouteMethADesc mMeth ident idPere b in 
         a::lm, (address ([if estMethDe a ident mMeth then "M_"^ident^"_"^a else "M_"^idPere^"_"^a])) ++ c
 
-let compileConstruct ident plnames debutTas =
-	(*il me semble que la pile contient directement les args en bas à décal + 16. On sq l'objet est en haut de la pile *)
-	let debutPile = 16 in 
+let rec compileConstruct ident idPere expr_pere plnames decalTas =
+	(*il me semble que la pile contient directement les args en bas à décal + 24 (en effet, à +8 rbp saved, à +16 adr retour). On sq l'objet est en bas de la pile *)
+	let posTas = 8*(List.length plnames)+24 in
+	let debutPile = 24 in 
 	let res = 
 		label ("C_"^ident) ++
-        (fst (List.fold_left (fun (c,decal) x -> (movq (ind ~ofs:(debutPile+decal) rbp) (ind ~ofs:(debutTas+decal) rsp)) ++ c, decal+8) (nop, 0) plnames)
+		pushq (reg rbp) ++
+		movq (reg rsp) (reg rbp) ++
+		pushq (ind ~ofs:(posTas) rbp) ++
+		(List.fold_left (fun c x -> c++(compile_expr x Smap.empty 0)) nop expr_pere) ++
+		call ("C_"^idPere) ++
+		(*TODO : continuer ce que j'ai commencé ici *)
+		popn (8+8*(List.length expr_pere)) ++
+		movq (ind ~ofs:(posTas) rbp) (reg rax) ++ (*on commencera à +8 car il y a le desc de classe*)
+        (fst (List.fold_left (fun (c,decal) x -> (movq (ind ~ofs:(debutPile+decal) rbp) (ind ~ofs:(decal+8) rax)) ++ c, decal+8) (nop, 0) (List.rev plnames))
 		)
 	in
 	res
 
-let getPlNames pl =
+and getPlNames pl =
 	List.map fst pl
 
-let getCstVal cst = match cst with
+and getCstVal cst = match cst with
   | Cunit -> imm 0
   | Cint(res) -> imm res (*sur 64 bits, il va falloir remplacer tous les 8 par des 64 -> ah non, pas du tout, my bad *)
   | Cbool(b) -> imm (if b then 1 else 0)
   | Cstring(str) -> liste_str := str::(!liste_str); ilab ("str_"^(string_of_int (List.length (!liste_str))))
 
-let super_compteur = ref 0
 
-let dummy_typ = ("dummy", dummy_inter, ArgsType([]))
 
 (* Valeur de retour : 'a ast, le résultat se trouve en haut de pile *)
-let rec compile_expr typd_exp env positionAlloc =
+and compile_expr typd_exp env positionAlloc =
 	match fst typd_exp with
 	| PEcst(cst) -> pushq (getCstVal cst)
-    | PEthis -> assert(false)(* ?? on est censé l'avoir en haut de la pile mais cet invariant n'est pas maintenable. TODO *)
+    | PEthis -> let posThis = Smap.find "this" env in
+                let code = 
+                    pushq (ind ~ofs:posThis rbp) (*on aura un truc du genre 16(rbp) pour this*)
+                in
+                code
     | PEnull -> pushq (imm 0)
     | PEaccess(lv) ->
         (match lv with
@@ -76,8 +91,12 @@ let rec compile_expr typd_exp env positionAlloc =
 	            else assert(false) (*compile_expr (PEaccess(PLaccess((PEthis), ident)), dummy_inter) env positionAlloc*) (*je crois qu'on a pas besoin*)
             | PLaccess(locd_expr,ident) -> 
 	            (* coucou, TODO, alloue *)
-	            let code = compile_expr locd_expr env positionAlloc in
-                assert(false))
+	            let ce = compile_expr locd_expr env positionAlloc in
+                let code = 
+                    nop
+                in
+                assert(false);
+                code)
     | PEaffect(lv,typd_expr) -> assert(false)
     | PEcall(lv,args_type,lexp_list) -> assert(false)
     | PEnew(ptyp,lexp_list) -> let (nom_classe,_,_)=ptyp in let lcode = List.map (fun x -> compile_expr x env positionAlloc) lexp_list in
@@ -205,8 +224,9 @@ and compileDecl classe decl reste newFun ordreVar debutConstruct =
 	    compileDecl_l classe reste newFun ordreVar debutConstruct
     | PDmeth(methode) ->
         let (ident, pl, expr) = methode in
-		let env,decal = List.fold_left (fun (ev,nxt) x -> Smap.add x nxt ev, nxt+8) (Smap.empty, 16) (getPlNames pl) in
-		let fpmax = 42 in (* TODO *)
+		let env,decal = List.fold_left (fun (ev,nxt) x -> Smap.add x nxt ev, nxt+8) (Smap.empty, 24) (getPlNames pl) in
+		let fpmax = 0 in (* TODO *)
+		let env = Smap.add "this" decal env in
         let ce = compile_expr expr env fpmax in
 		let code = 
 			label ("M_"^classe^"_"^ident) ++
@@ -222,7 +242,9 @@ let normalise map id =
     if Smap.mem id map then map
     else
     Smap.add id [] map
-	
+
+(*ordreVar contient toutes les variables d'une classe (ie les siennes et celles de ses parents*)
+
 let compile_class (codefun, codedesc, mMeth, ordreMeth, ordreVar) (PClass(ident,pl,(typ_pere, lexprl),pdecl_l)) = 
 	let (idPere,_,_)=typ_pere in
 	let ordreMeth = normalise ordreMeth idPere in
@@ -238,13 +260,13 @@ let compile_class (codefun, codedesc, mMeth, ordreMeth, ordreVar) (PClass(ident,
 	let plnames = (getPlNames pl) in
 	let ordreVar = Smap.add ident (lpere @ plnames) ordreVar in
 	(*Attention, les vars d'une classe sont allouées sur le tas*)
-	let debutConstruct = (compileConstruct ident plnames (8+(List.length lpere)*8)) in
+	let debutConstruct = (compileConstruct ident idPere lexprl plnames ((List.length lpere)*8)) in
     let newFun,ordreVar,constructFini = compileDecl_l ident pdecl_l codefun ordreVar debutConstruct in
 	let newFun = constructFini ++ ret ++ newFun in
 
 	newFun, newDesc, mMeth, newOrdreMeth, ordreVar
 
-let compileMain classe = 
+let compileMain classe ordreVar ordreMeth = 
 	let code = 
 		movq (reg rsp) (reg rbp) ++
         (* TODO : allouer objet de classe Main et appeler main() *)
@@ -277,7 +299,7 @@ let rec dernier l = match l with
 
 let compile_program (p : (pclas list)) ofile mMeth cmain =
   let codefun, codedesc, _, ordreMeth, ordreVar = List.fold_left compile_class (nop, nop, mMeth, Smap.empty, Smap.empty) (p) in
-  let codemain = compileMain (dernier p) in
+  let codemain = compileMain (dernier p) ordreVar ordreMeth in
   let p =
     { text =
         glabel "main" ++
