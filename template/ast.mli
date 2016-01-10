@@ -103,7 +103,7 @@ and pinstruction =
   | PIdef of pvar
   | PIexpr of typd_expr
   
-and pvar = ident * ptyp * expr
+and pvar = ident * ptyp * pexpr
   
 and pleft_value =
   | PLident of ident

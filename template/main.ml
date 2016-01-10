@@ -41,11 +41,11 @@ let () =
     let f = Parser.file Lexer.next_token lb in
     close_in c;
     if !parse_only then exit 0;
-    let mMeth,cmain = typeFichier f in
+    let (mMeth,cmain),nouvelArbre = typeFichier f in
     print_string "Typage reussi.";
     print_newline();
     if !type_only then exit 0;
-    compile_program f "lol.s" mMeth cmain
+    compile_program nouvelArbre "lol.s" mMeth cmain
   with
     | Lexer.Lexing_error s ->
 	    report (lexeme_start_p lb, lexeme_end_p lb);

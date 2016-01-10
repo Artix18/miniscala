@@ -60,25 +60,27 @@ let getCstVal cst = match cst with
 
 let super_compteur = ref 0
 
+let dummy_typ = ("dummy", dummy_inter, ArgsType([]))
+
 (* Valeur de retour : 'a ast, le résultat se trouve en haut de pile *)
-let rec compile_expr locd_exp env positionAlloc =
-	match fst locd_exp with
-	| Ecst(cst) -> pushq (getCstVal cst)
-    | Ethis -> assert(false)(* ?? on est censé l'avoir en haut de la pile mais cet invariant n'est pas maintenable. TODO *)
-    | Enull -> pushq (imm 0)
-    | Eaccess(lv) ->
+let rec compile_expr typd_exp env positionAlloc =
+	match fst typd_exp with
+	| PEcst(cst) -> pushq (getCstVal cst)
+    | PEthis -> assert(false)(* ?? on est censé l'avoir en haut de la pile mais cet invariant n'est pas maintenable. TODO *)
+    | PEnull -> pushq (imm 0)
+    | PEaccess(lv) ->
         (match lv with
-            | Lident(ident,truc) ->
+            | PLident(ident) ->
                 if Smap.mem ident env
                 then pushq (ind ~ofs:(Smap.find ident env) rsp)
-	            else compile_expr (Eaccess(Laccess((Ethis, truc), ident, truc)), dummy_inter) env positionAlloc
-            | Laccess(locd_expr,ident,_) -> 
+	            else assert(false) (*compile_expr (PEaccess(PLaccess((PEthis), ident)), dummy_inter) env positionAlloc*) (*je crois qu'on a pas besoin*)
+            | PLaccess(locd_expr,ident) -> 
 	            (* coucou, TODO, alloue *)
 	            let code = compile_expr locd_expr env positionAlloc in
                 assert(false))
-    | Eaffect(lv,locd_expr,_) -> assert(false)
-    | Ecall(lv,args_type,lexp_list) -> assert(false)
-    | Enew(nom_classe,args_type,lexp_list) -> let lcode = List.map (fun x -> compile_expr x env positionAlloc) lexp_list in
+    | PEaffect(lv,typd_expr) -> assert(false)
+    | PEcall(lv,args_type,lexp_list) -> assert(false)
+    | PEnew(ptyp,lexp_list) -> let (nom_classe,_,_)=ptyp in let lcode = List.map (fun x -> compile_expr x env positionAlloc) lexp_list in
                                               let code = 
                                                 (* TODO la taille de la classe *)
                                                 movq (imm 40) (reg rdi) ++
@@ -90,11 +92,11 @@ let rec compile_expr locd_exp env positionAlloc =
                                                 (* pas le dernier pop *)
                                               in
                                               code
-    | Eunop(unop, lexpr) -> assert(false)
-    | Ebinop(binop,lexp1,lexp2,_)-> let v1 = compile_expr lexp1 env positionAlloc in let v2 = compile_expr lexp2 env positionAlloc in
+    | PEunop(unop, lexpr) -> assert(false)
+    | PEbinop(binop,lexp1,lexp2)-> let v1 = compile_expr lexp1 env positionAlloc in let v2 = compile_expr lexp2 env positionAlloc in
                                     let codeLog = (match binop with
-                                                | Bor -> (compile_expr (Eif(lexp1, (Ecst(Cbool(true)),dummy_inter), lexp2), dummy_inter) env positionAlloc)
-                                                | Band -> (compile_expr (Eif(lexp1, lexp2, (Ecst(Cbool(false)),dummy_inter)), dummy_inter) env positionAlloc)
+                                                | Bor -> (compile_expr (PEif(lexp1, (PEcst(Cbool(true)),dummy_typ), lexp2), dummy_typ) env positionAlloc)
+                                                | Band -> (compile_expr (PEif(lexp1, lexp2, (PEcst(Cbool(false)),dummy_typ)), dummy_typ) env positionAlloc)
                                                 | _ -> nop
                                                 )
                                     in
@@ -118,7 +120,7 @@ let rec compile_expr locd_exp env positionAlloc =
                                         ++ pushq (reg rax))
                                     in
                                     codeLog ++ code
-    | Eif(lcond,lthen,lelse) -> let ccond = compile_expr lcond env positionAlloc in let cthen = compile_expr lthen env positionAlloc in let celse = compile_expr lelse env positionAlloc in
+    | PEif(lcond,lthen,lelse) -> let ccond = compile_expr lcond env positionAlloc in let cthen = compile_expr lthen env positionAlloc in let celse = compile_expr lelse env positionAlloc in
                                 let magic_id = string_of_int (!super_compteur) in
                                 super_compteur := (!super_compteur) + 1;
                                 let code = 
@@ -134,7 +136,7 @@ let rec compile_expr locd_exp env positionAlloc =
                                     label ("end_"^magic_id)
                                 in
                                 code
-    | Ewhile(lexpr, ldo) -> let ccond = compile_expr lexpr env positionAlloc in let cdo = compile_expr ldo env positionAlloc in
+    | PEwhile(lexpr, ldo) -> let ccond = compile_expr lexpr env positionAlloc in let cdo = compile_expr ldo env positionAlloc in
                             let magic_id = string_of_int (!super_compteur) in
                             super_compteur := (!super_compteur) + 1;
                             let code =
@@ -155,12 +157,12 @@ let rec compile_expr locd_exp env positionAlloc =
                                 pushq (imm 0)
                             in
                             code
-    | Ereturn(lexpr_ret) -> let v = compile_expr lexpr_ret env positionAlloc in
+    | PEreturn(lexpr_ret) -> let v = compile_expr lexpr_ret env positionAlloc in
                             let code =
                                 v ++ popq rax ++ popn positionAlloc ++ popq rbp ++ ret
                             in
                             code
-    | Eprint(lexpr_print) -> let res = compile_expr lexpr_print env positionAlloc in
+    | PEprint(lexpr_print) -> let res = compile_expr lexpr_print env positionAlloc in
                              let code =
                                 (* pushn place *)
                                 res ++
@@ -170,15 +172,15 @@ let rec compile_expr locd_exp env positionAlloc =
                                 pushq (imm 0) (* unit *)
                              in
                              code
-    | Ebloc(instruction_list) ->
+    | PEbloc(instruction_list) ->
         match instruction_list with
         | [] -> pushq (imm 0)
-        | [Iexpr e] -> compile_expr e env positionAlloc
-        | bidule::reste -> let c2 = compile_expr (Ebloc(reste), dummy_inter) env positionAlloc in (*normalement c pas env *)
+        | [PIexpr e] -> compile_expr e env positionAlloc
+        | bidule::reste -> let c2 = compile_expr (PEbloc(reste), dummy_typ) env positionAlloc in (*normalement c pas env *)
                            let code = 
                              (match bidule with
-                             | Idef(var) -> assert(false)
-                             | Iexpr(locd_expr) -> let cc = compile_expr locd_expr env positionAlloc in cc) ++
+                             | PIdef(var) -> assert(false)
+                             | PIexpr(locd_expr) -> let cc = compile_expr locd_expr env positionAlloc in cc) ++
                              popq rax ++
                              c2
                            in
@@ -192,16 +194,17 @@ let rec compileDecl_l classe pdecl_l newFun ordreVar debutConstruct =
 	| a::b -> compileDecl classe a b newFun ordreVar debutConstruct
 and compileDecl classe decl reste newFun ordreVar debutConstruct = 
 	match decl with
-    | Dvar(var) ->
-        let (_, ident, _, expr, _) = var in
+    | PDvar(var) ->
+        let (ident, ptyp, pexpr) = var in
+        let expr = (pexpr, ptyp) in
 	    let ordreVar = Smap.add classe (ident::(Smap.find classe ordreVar)) ordreVar in
 	    (* TODO : allouer de la place pour l'expression *)
 	    let ce = compile_expr expr (Smap.empty) 0 in (*dans quoi mettre ça ?*) (*le res est en haut de la pile, mettons le dans rbx*)
 	    let debutConstruct = debutConstruct ++ ce ++ popq rbx ++ (movq (reg rbx) (ind ~ofs:(8*(List.length (Smap.find classe ordreVar))) rsp)) in
 	    (*TODO : libérer la place *)
 	    compileDecl_l classe reste newFun ordreVar debutConstruct
-    | Dmeth(methode) ->
-        let (_,ident,ptl, pl, _ , expr, _) = methode in
+    | PDmeth(methode) ->
+        let (ident, pl, expr) = methode in
 		let env,decal = List.fold_left (fun (ev,nxt) x -> Smap.add x nxt ev, nxt+8) (Smap.empty, 16) (getPlNames pl) in
 		let fpmax = 42 in (* TODO *)
         let ce = compile_expr expr env fpmax in
@@ -220,7 +223,7 @@ let normalise map id =
     else
     Smap.add id [] map
 	
-let compile_class (codefun, codedesc, mMeth, ordreMeth, ordreVar) (Class(ident,_,ptcl,pl,(typ_pere, lexprl),pdecl_l)) = 
+let compile_class (codefun, codedesc, mMeth, ordreMeth, ordreVar) (PClass(ident,pl,(typ_pere, lexprl),pdecl_l)) = 
 	let (idPere,_,_)=typ_pere in
 	let ordreMeth = normalise ordreMeth idPere in
 	let ordreVar = normalise ordreVar idPere in
@@ -267,9 +270,14 @@ let compileMain classe =
 	in
 	code
 
-let compile_program p ofile mMeth cmain =
-  let codefun, codedesc, _, ordreMeth, ordreVar = List.fold_left compile_class (nop, nop, mMeth, Smap.empty, Smap.empty) (cmain::(fst p)) in
-  let codemain = compileMain (snd p) in
+let rec dernier l = match l with
+    | [] -> assert(false)
+    | [a] -> a
+    | a::b -> dernier b
+
+let compile_program (p : (pclas list)) ofile mMeth cmain =
+  let codefun, codedesc, _, ordreMeth, ordreVar = List.fold_left compile_class (nop, nop, mMeth, Smap.empty, Smap.empty) (p) in
+  let codemain = compileMain (dernier p) in
   let p =
     { text =
         glabel "main" ++

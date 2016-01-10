@@ -14,7 +14,14 @@ class Mdr extends Lol
 
 object Main {
   def main(args: Array[String]) {
-    return
+    if(42==1)
+        return
+    else
+    {
+        print(1);
+        return
+    };
+    print(2)
   }
 }
 
