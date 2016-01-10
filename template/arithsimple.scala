@@ -4,7 +4,7 @@ class Lol {
     }
 }
 
-class Mdr extends Lol
+class Mdr(x : Int) extends Lol
 {
     def truc():Lol=
     {
@@ -14,9 +14,10 @@ class Mdr extends Lol
 
 object Main {
   def main(args: Array[String]) {
-    if(42==6*7)
+    if(!(-42==(6*7)))
     {
-        print(4)
+        var x = 42;
+        print(x)
     }
     else
     {
