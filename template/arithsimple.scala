@@ -1,30 +1,12 @@
-class Lol {
-    def bidule()
-    {
-    }
-}
-
-class Mdr(x : Int) extends Lol
+class Mdr
 {
-    def truc():Lol=
-    {
-        new Lol()
-    }
+	var x = 5;
+	def m() { }
 }
 
 object Main {
   def main(args: Array[String]) {
-    if(!(-42==(6*7)))
-    {
-        var x = 42;
-        print(x)
-    }
-    else
-    {
-        print(1);
-        return
-    };
-    print(2)
+    var y = new Mdr()
   }
 }
 
