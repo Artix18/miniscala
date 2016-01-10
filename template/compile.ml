@@ -76,6 +76,11 @@ and getCstVal cst = match cst with
   | Cbool(b) -> imm (if b then 1 else 0)
   | Cstring(str) -> liste_str := str::(!liste_str); ilab (".str_"^(string_of_int (List.length (!liste_str))))
 
+and combienIeme id liste = 
+	match liste with
+	| [] -> assert(false)
+	| p::q -> if p=id then 0 else 1+(combienIeme id q)
+
 (* Valeur de retour : 'a ast, le résultat se trouve en haut de pile *)
 and compile_expr typd_exp env positionAlloc ordreVar ordreMeth =
 	match fst typd_exp with
@@ -92,13 +97,16 @@ and compile_expr typd_exp env positionAlloc ordreVar ordreMeth =
                 if Smap.mem ident env
                 then pushq (ind ~ofs:(Smap.find ident env) rsp)
 	            else assert(false) (*compile_expr (PEaccess(PLaccess((PEthis), ident)), dummy_inter) env positionAlloc*) (*je crois qu'on a pas besoin*)
-            | PLaccess(locd_expr,ident) -> 
+            | PLaccess(typd_expr,ident) -> 
 	            (* coucou, TODO, alloue *)
-	            let ce = compile_expr locd_expr env positionAlloc ordreVar ordreMeth in
+	            let ce = compile_expr typd_expr env positionAlloc ordreVar ordreMeth in
+	            let (nom_classe, _,_) = (snd typd_expr) in
                 let code = 
-                    nop
+                    ce ++
+                    popq rbx ++
+                    movq (ind ~ofs:(8+8*(combienIeme ident (Smap.find nom_classe ordreVar))) rbx) (reg rax) ++
+                    pushq (reg rax)
                 in
-                assert(false);
                 code)
     | PEaffect(lv,typd_expr) -> assert(false)
     | PEcall(lv,args_type,lexp_list) -> assert(false)
@@ -241,7 +249,7 @@ and compileDecl classe decl reste newFun ordreVar debutConstruct ordreMeth =
     | PDvar(var) ->
         let (ident, ptyp, pexpr) = var in
         let expr = (pexpr, ptyp) in
-	    let ordreVar = Smap.add classe (ident::(Smap.find classe ordreVar)) ordreVar in
+	    let ordreVar = Smap.add classe ((Smap.find classe ordreVar)@[ident]) ordreVar in
 	    (* TODO : allouer de la place pour l'expression *)
 	    let ce = compile_expr expr (Smap.empty) 0 ordreVar ordreMeth in (*le res est en haut de la pile, mettons le dans rbx*)
 	    let debutConstruct = debutConstruct ++ ce ++ popq rbx ++ (movq (reg rbx) (ind ~ofs:(8*(List.length (Smap.find classe ordreVar))) rsp)) in
