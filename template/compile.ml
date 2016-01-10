@@ -60,6 +60,7 @@ let rec compileConstruct ident idPere expr_pere plnames decalTas ordreVar ordreM
 		popn (8+8*(List.length expr_pere)) ++ (*pop this et les arguments*)
 
 		movq (ind ~ofs:(posTas) rbp) (reg rax) ++ (*decalage sur le tas : +8 car il y a le desc de classe, +8*nbVarParents=decalTas *)
+		movq (reg rax) (reg r14) ++
         (fst (List.fold_left (fun (c,decal) x -> (movq (ind ~ofs:(debutPile+decal) rbp) (reg rbx)) ++ (movq (reg rbx) (ind ~ofs:(decal+8+decalTas) rax)) ++ c, decal+8) (nop, 0) (List.rev plnames))
 		)
 	in
@@ -113,7 +114,7 @@ and compile_expr typd_exp env positionAlloc ordreVar ordreMeth =
     | PEnew(ptyp,lexp_list) -> let (nom_classe,_,_)=ptyp in let lcode = List.map (fun x -> compile_expr x env positionAlloc ordreVar ordreMeth) lexp_list in
                                               let code = 
                                                 (* TODO la taille de la classe *)
-                                                movq (imm (16+8*(List.length (Smap.find nom_classe ordreVar)))) (reg rdi) ++
+                                                movq (imm (8+8*(List.length (Smap.find nom_classe ordreVar)))) (reg rdi) ++
                                                 call "malloc" ++
                                                 movq (ilab ("D_"^nom_classe)) (ind ~ofs:0 rax) ++ (*met le descripteur de classe, pas sûr*)
                                                 pushq (reg rax) ++
@@ -252,7 +253,7 @@ and compileDecl classe decl reste newFun ordreVar debutConstruct ordreMeth =
 	    let ordreVar = Smap.add classe ((Smap.find classe ordreVar)@[ident]) ordreVar in
 	    (* TODO : allouer de la place pour l'expression *)
 	    let ce = compile_expr expr (Smap.empty) 0 ordreVar ordreMeth in (*le res est en haut de la pile, mettons le dans rbx*)
-	    let debutConstruct = debutConstruct ++ ce ++ popq rbx ++ (movq (reg rbx) (ind ~ofs:(8*(List.length (Smap.find classe ordreVar))) rsp)) in
+	    let debutConstruct = debutConstruct ++ ce ++ popq rbx ++ (movq (reg rbx) (ind ~ofs:(8*(List.length (Smap.find classe ordreVar))) r14)) in
 	    (*TODO : libérer la place *)
 	    compileDecl_l classe reste newFun ordreVar debutConstruct ordreMeth
     | PDmeth(methode) ->

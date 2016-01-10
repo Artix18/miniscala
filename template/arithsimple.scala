@@ -6,7 +6,7 @@ class Mdr
 
 object Main {
   def main(args: Array[String]) {
-    var y = new Mdr()
+    new Mdr(); ()
   }
 }
 
