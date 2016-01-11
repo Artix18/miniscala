@@ -3,6 +3,8 @@ open Ast
 open Format
 open Typage
 
+(* WARNING : en fait j'ai compris que j'avais un truc très faux : rsp pointe vers le dernier et pas vers après, donc les decal c'est tous des 16 et pas 24 *)
+
 let (genv : (string, unit) Hashtbl.t) = Hashtbl.create 42
 let sz = 8
 
@@ -30,11 +32,18 @@ let getMethName meth =
 	let _,name,_,_,_,_,_ = meth in
 	name
 
+let normalise map id = 
+    if Smap.mem id map then map
+    else
+    Smap.add id [] map
+
 let estMethDe nom classeId mMeth = 
-	List.exists (fun x -> x = nom) (List.map getMethName (Smap.find classeId mMeth))
+	(*Smap.mem classeId mMeth &&*) (List.exists (fun x -> x = nom) (List.map getMethName (Smap.find classeId mMeth)))
 
 let nonOverMeth mMeth ident = 
-	List.map getMethName (List.filter isOver (Smap.find ident mMeth))
+    (*if Smap.mem ident mMeth then*)
+	    List.map getMethName (List.filter isOver (Smap.find ident mMeth))
+	(*else []*)
 
 (* c'est pas mMeth qu'il faut mais une map avec uniquement les méthodes de la classe et pas celles de ses parents *)
 let rec ajouteMethADesc mMeth (ident:string) idPere (listeMeth:string list) =
@@ -44,9 +53,9 @@ let rec ajouteMethADesc mMeth (ident:string) idPere (listeMeth:string list) =
         a::lm, (address ([if estMethDe a ident mMeth then "M_"^ident^"_"^a else "M_"^idPere^"_"^a])) ++ c
 
 let rec compileConstruct ident idPere expr_pere plnames decalTas ordreVar ordreMeth =
-	(*il me semble que la pile contient directement les args en bas à décal + 24 (en effet, à +8 rbp saved, à +16 adr retour). On sq l'objet est en bas de la pile *)
-	let posTas = 8*(List.length plnames)+24 in
-	let debutPile = 16 in (*j'aurais dit 24 mais ça marche que avec 16*)
+	(*il me semble que la pile contient directement les args en bas à décal + 16 (en effet, à +0 rbp saved, à +8 adr retour). On sq l'objet est en bas de la pile *)
+	let posTas = 8*(List.length plnames)+16 in (*si +16 ça bug, +24 ça marche, wtf ?*)
+	let debutPile = 16 in (*j'aurais dit 24 mais ça marche que avec 16. EDIT : j'ai trouvé pourquoi. OUPAS*)
 	let res = 
 		label ("C_"^ident) ++
 		pushq (reg rbp) ++
@@ -64,7 +73,7 @@ let rec compileConstruct ident idPere expr_pere plnames decalTas ordreVar ordreM
         (fst (List.fold_left (fun (c,decal) x -> (movq (ind ~ofs:(debutPile+decal) rbp) (reg rbx)) ++ (movq (reg rbx) (ind ~ofs:(8+8*(combienIeme x (Smap.find ident ordreVar))) rax)) ++ c, decal+8) (nop, 0) (List.rev plnames))
 		)
 	in
-	res
+	res,posTas
 
 and getPlNames pl =
 	List.map fst pl
@@ -86,7 +95,8 @@ and combienIeme id liste =
 and compile_expr typd_exp env positionAlloc ordreVar ordreMeth =
 	match fst typd_exp with
 	| PEcst(cst) -> pushq (getCstVal cst)
-    | PEthis -> let posThis = Smap.find "this" env in
+    | PEthis -> if not (Smap.mem "this" env) then failwith "lol";
+                let posThis = Smap.find "this" env in
                 let code = 
                     pushq (ind ~ofs:posThis rbp) (*on aura un truc du genre 16(rbp) pour this*)
                 in
@@ -109,12 +119,48 @@ and compile_expr typd_exp env positionAlloc ordreVar ordreMeth =
                     pushq (reg rax)
                 in
                 code)
-    | PEaffect(lv,typd_expr) -> assert(false)
-    | PEcall(lv,args_type,lexp_list) -> assert(false)
+    | PEaffect(lv,typd_expr_affect) ->(
+            match lv with
+            | PLident(ident) -> let ceaff = compile_expr typd_expr_affect env positionAlloc ordreVar ordreMeth in
+                                let posPileDeIdent = Smap.find ident env in
+                                let code =
+                                    ceaff ++
+                                    popq rax ++
+                                    movq (reg rax) (ind ~ofs:posPileDeIdent rbp) ++
+                                    pushq (imm 0)
+                                in
+                                code
+            | PLaccess(typd_expr, ident) -> 
+                                   let ceaff = compile_expr typd_expr_affect env positionAlloc ordreVar ordreMeth in
+                                   let ceobj = compile_expr typd_expr env positionAlloc ordreVar ordreMeth in
+                                   let (nom_classe, _,_) = (snd typd_expr) in
+                                   let posDansObj = 8+8*(combienIeme ident (Smap.find nom_classe ordreVar)) in
+                                   let code =
+                                       ceaff ++
+                                       ceobj ++
+                                       popq rax ++
+                                       popq rbx ++
+                                       movq (reg rbx) (ind ~ofs:(posDansObj) rax) ++
+                                       pushq (imm 0)
+                                   in
+                                   code
+            )
+    | PEcall(lv,args_type,lexp_list) -> 
+                                   let PLaccess(obj_expr, ident) = lv in
+                                   let ceobj = compile_expr obj_expr env positionAlloc ordreVar ordreMeth in
+                                   let (nom_classe, _,_) = (snd obj_expr) in
+                                   let code = 
+                                       ceobj ++ (*attention à this dans env /!\ TODO*)
+                                       (List.fold_left (fun c x -> c ++ (compile_expr x env positionAlloc ordreVar ordreMeth)) (nop) lexp_list) ++
+                                       call ("M_"^nom_classe^"_"^ident) ++
+                                       popn (8+8*(List.length lexp_list)) ++
+                                       pushq (reg rax) (*valeur de retour*)
+                                   in
+                                   code
     | PEnew(ptyp,lexp_list) -> let (nom_classe,_,_)=ptyp in let lcode = List.map (fun x -> compile_expr x env positionAlloc ordreVar ordreMeth) lexp_list in
                                               let code = 
                                                 (* TODO la taille de la classe *)
-                                                movq (imm (16+8*(List.length (Smap.find nom_classe ordreVar)))) (reg rdi) ++
+                                                movq (imm (8+8*(List.length (Smap.find nom_classe ordreVar)))) (reg rdi) ++
                                                 call "malloc" ++
                                                 movq (ilab ("D_"^nom_classe)) (ind ~ofs:0 rax) ++ (*met le descripteur de classe, pas sûr*)
                                                 pushq (reg rax) ++
@@ -199,7 +245,7 @@ and compile_expr typd_exp env positionAlloc ordreVar ordreMeth =
                             code
     | PEreturn(lexpr_ret) -> let v = compile_expr lexpr_ret env positionAlloc ordreVar ordreMeth in
                             let code =
-                                v ++ popq rax ++ popn positionAlloc ++ popq rbp ++ ret
+                                v ++ popq rax ++ movq (reg rbp) (reg rsp) (*popn positionAlloc*) ++ popq rbp ++ ret
                             in
                             code
     | PEprint(texpr_print) -> let res = compile_expr texpr_print env positionAlloc ordreVar ordreMeth in
@@ -223,7 +269,7 @@ and compile_expr typd_exp env positionAlloc ordreVar ordreMeth =
         | bidule::reste -> (
                            match bidule with
                              | PIdef(var) -> let (ident,typ,pexpr) = var in let ce = compile_expr (pexpr, typ) env positionAlloc ordreVar ordreMeth in
-                                             let env = Smap.add ident positionAlloc env in
+                                             let env = Smap.add ident (-positionAlloc) env in
                                              let c2 = compile_expr (PEbloc(reste), dummy_typ) env (positionAlloc+8) ordreVar ordreMeth in
                                              let code = 
                                                 ce ++
@@ -241,27 +287,27 @@ and compile_expr typd_exp env positionAlloc ordreVar ordreMeth =
         | _ -> pushq (imm 0)
     | _ -> assert(false)
 
-let rec compileDecl_l classe pdecl_l newFun ordreVar debutConstruct ordreMeth = 
+let rec compileDecl_l classe pdecl_l newFun ordreVar debutConstruct ordreMeth posTas = 
 	match pdecl_l with
 	| [] -> newFun, ordreVar,debutConstruct
-	| a::b -> compileDecl classe a b newFun ordreVar debutConstruct ordreMeth
-and compileDecl classe decl reste newFun ordreVar debutConstruct ordreMeth = 
+	| a::b -> compileDecl classe a b newFun ordreVar debutConstruct ordreMeth posTas
+and compileDecl classe decl reste newFun ordreVar debutConstruct ordreMeth posTas = 
 	match decl with
     | PDvar(var) ->
         let (ident, ptyp, pexpr) = var in
         let expr = (pexpr, ptyp) in
+        let ordreVar = normalise ordreVar classe in
 	    let ordreVar = Smap.add classe ((Smap.find classe ordreVar)@[ident]) ordreVar in
 	    (* TODO : allouer de la place pour l'expression *)
-	    let ce = compile_expr expr (Smap.empty) 0 ordreVar ordreMeth in (*le res est en haut de la pile, mettons le dans rbx*)
+	    let ce = compile_expr expr (Smap.add "this" posTas Smap.empty) 8 ordreVar ordreMeth in (*le res est en haut de la pile, mettons le dans rbx*)
 	    let debutConstruct = debutConstruct ++ ce ++ popq rbx ++ (movq (reg rbx) (ind ~ofs:(8*(List.length (Smap.find classe ordreVar))) r14)) in
 	    (*TODO : libérer la place *)
-	    compileDecl_l classe reste newFun ordreVar debutConstruct ordreMeth
+	    compileDecl_l classe reste newFun ordreVar debutConstruct ordreMeth posTas
     | PDmeth(methode) ->
         let (ident, pl, expr) = methode in
-		let env,decal = List.fold_left (fun (ev,nxt) x -> Smap.add x nxt ev, nxt+8) (Smap.empty, 24) (getPlNames pl) in
-		let fpmax = 0 in (* TODO *)
+		let env,decal = List.fold_left (fun (ev,nxt) x -> Smap.add x nxt ev, nxt+8) (Smap.empty, 16) (getPlNames pl) in
 		let env = Smap.add "this" decal env in
-        let ce = compile_expr expr env fpmax ordreVar ordreMeth in
+        let ce = compile_expr expr env 8 ordreVar ordreMeth in
 		let code = 
 			label ("M_"^classe^"_"^ident) ++
 		    pushq (reg rbp) ++
@@ -270,12 +316,7 @@ and compileDecl classe decl reste newFun ordreVar debutConstruct ordreMeth =
 			movq (reg rbp) (reg rsp) ++ popq rbp ++ ret
 		in
 		let newFun = newFun ++ code in
-		compileDecl_l classe reste newFun ordreVar debutConstruct ordreMeth
-
-let normalise map id = 
-    if Smap.mem id map then map
-    else
-    Smap.add id [] map
+		compileDecl_l classe reste newFun ordreVar debutConstruct ordreMeth posTas
 
 (*ordreVar contient toutes les variables d'une classe (ie les siennes et celles de ses parents*)
 
@@ -283,6 +324,8 @@ let compile_class (codefun, codedesc, mMeth, ordreMeth, ordreVar) (PClass(ident,
 	let (idPere,_,_)=typ_pere in
 	let ordreMeth = normalise ordreMeth idPere in
 	let ordreVar = normalise ordreVar idPere in
+	let ordreMeth = normalise ordreMeth ident in (*inutile ?*)
+	let mMeth = normalise mMeth ident in
 
 	let lm, cd = (ajouteMethADesc mMeth ident idPere (Smap.find idPere ordreMeth)) in
 	let newDesc = 
@@ -294,8 +337,8 @@ let compile_class (codefun, codedesc, mMeth, ordreMeth, ordreVar) (PClass(ident,
 	let plnames = (getPlNames pl) in
 	let ordreVar = Smap.add ident (lpere @ plnames) ordreVar in
 	(*Attention, les vars d'une classe sont allouées sur le tas*)
-	let debutConstruct = (compileConstruct ident idPere lexprl plnames ((List.length lpere)*8) ordreVar ordreMeth) in
-    let newFun,ordreVar,constructFini = compileDecl_l ident pdecl_l codefun ordreVar debutConstruct newOrdreMeth in
+	let debutConstruct,posTas = (compileConstruct ident idPere lexprl plnames ((List.length lpere)*8) ordreVar ordreMeth) in
+    let newFun,ordreVar,constructFini = compileDecl_l ident pdecl_l codefun ordreVar debutConstruct newOrdreMeth posTas in
 	let newFun = constructFini ++ movq (reg rbp) (reg rsp) ++ popq rbp ++ ret ++ newFun in
 
 	newFun, newDesc, mMeth, newOrdreMeth, ordreVar
@@ -359,7 +402,7 @@ let compile_program (p : (pclas list)) ofile mMeth cmain =
         
       data =
         fst (List.fold_left (fun (code,nb) x -> label (".str_"^(string_of_int nb)) ++ string x ++ code, nb-1)
-        ((label ".Sprint_int" ++ string "%d\n" ++ label ".Sprint_string" ++ string "%s\n"),(List.length (!liste_str))) (!liste_str))
+        ((label ".Sprint_int" ++ string "%d" ++ label ".Sprint_string" ++ string "%s"),(List.length (!liste_str))) (!liste_str))
           ++ codedesc
           ++ (label "D_AnyRef")
     }
