@@ -9,17 +9,22 @@ object Main {
     if(42==40+2)
     {
         print(y.z);
+        print("\n");
         var p = 42;
         print(p);
+         print("\n");
         p = 12;
         print(p);
-        y.x = 27;
+         print("\n");
         print(y.x);
+         print("\n");
         print(y.x);
+         print("\n");
         return;
         print(2)
     };
-    print(1)
+    print(1);
+     print("\n")
   }
 }
 

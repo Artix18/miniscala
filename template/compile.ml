@@ -175,7 +175,7 @@ and compile_expr typd_exp env positionAlloc ordreVar ordreMeth =
                                                 movq (imm (8+8*(List.length (Smap.find nom_classe ordreVar)))) (reg rdi) ++
                                                 call "malloc" ++
                                                 movq (ilab ("D_"^nom_classe)) (ind ~ofs:0 rax) ++ (*met le descripteur de classe, pas sûr*)
-                                                pushq (reg rax) ++
+                                                pushq (reg rax) ++ (* objet, donc le this *)
                                                 (List.fold_left (fun c x -> c ++ x) (nop) lcode) ++
                                                 call ("C_"^nom_classe) ++
                                                 (List.fold_left (fun c x -> c ++ popq rax) (nop) lcode)
@@ -360,13 +360,15 @@ let compileMain classe ordreVar ordreMeth =
 	let code = 
 		movq (reg rsp) (reg rbp) ++
         (* TODO : allouer objet de classe Main et appeler main() *)
-        movq (imm 40) (reg rdi) ++
+        movq (imm (8+8*(List.length (Smap.find "Main" ordreVar)))) (reg rdi) ++
         call "malloc" ++
-        movq (reg rax) (reg r12) ++
-        movq (ilab "D_Main") (ind ~ofs:0 r12) ++
-        pushq (reg r12) ++
+        movq (ilab "D_Main") (ind ~ofs:0 rax) ++
+        pushq (reg rax) ++
+        call "C_Main" ++
+        pushq (imm 0) ++
         call "M_Main_main" ++
-        popq r12 ++
+        popq rax ++
+        popq rax ++
         movq (imm 0) (reg rax) ++ (* exit *)
         ret
         (*label "C_Main" ++
