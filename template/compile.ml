@@ -211,7 +211,7 @@ and compile_expr typd_exp env positionAlloc ordreVar ordreMeth =
                                 (if estInt (snd texpr_print) then
                                     call "print_int"
                                  else
-                                    call "print_string"
+                                    call "print_int" (*on laisse print_int pour debug*)
                                 ) ++
                                 pushq (imm 0) (* unit *)
                              in
