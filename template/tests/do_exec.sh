@@ -11,9 +11,14 @@ for f in exec/*.scala; do
     rm -f out
     ../pscala $f && gcc ./lol.s;
     ./a.out > out;
-    if grep -q "<" out; then
+    filename="${f%.*}";
+    fout="$filename"".out";
+    rm -f truc;
+    `diff out $fout` > truc;
+    if grep -q '<' truc; then
         echo "Failed: The compilation should have succeded";
     else
+        echo "Succès !";
         score=`expr $score + 1`
     fi
 done
