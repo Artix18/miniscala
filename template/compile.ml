@@ -55,7 +55,7 @@ let prendreCelleDe idPere idMeth map =
 (* c'est pas mMeth qu'il faut mais une map avec uniquement les méthodes de la classe et pas celles de ses parents *)
 let rec ajouteMethADesc mMeth (ident:string) idPere (listeMeth:string list) mapFoncNommees =
 	match listeMeth with
-	| [] -> let l,fnl = (nonOverMeth mMeth ident) in l,(List.fold_left (fun m x -> address [("M_"^ident^"_"^x)] ++ m) (nop) l),fnl
+	| [] -> let l,fnl = (nonOverMeth mMeth ident) in (List.rev l),(List.fold_left (fun m x -> address [("M_"^ident^"_"^x)] ++ m) (nop) l),fnl
 	| a::b -> let lm,c,fnl = ajouteMethADesc mMeth ident idPere b mapFoncNommees in 
 	    let foncNommee = if estMethDe a ident mMeth then "M_"^ident^"_"^a else prendreCelleDe idPere a mapFoncNommees in
         a::lm, (address ([foncNommee])) ++ c, (a,foncNommee)::fnl
@@ -354,7 +354,7 @@ let compile_class (codefun, codedesc, mMeth, ordreMeth, ordreVar, map_fonc_nomme
 	let newDesc = 
 		label ("D_"^ident) ++ address [("D_"^idPere)] ++ cd ++ codedesc
 	in
-	let lm = List.rev lm in
+	(*let lm = List.rev lm in*)
 	let newOrdreMeth = Smap.add ident lm ordreMeth in
 
 	let lpere = (Smap.find idPere ordreVar) in
@@ -405,7 +405,7 @@ let affiche_liste l =
 
 let debug_affiche_ordreMeth map = 
     Printf.printf "debug\n";
-    affiche_liste (Smap.find "Main" map)
+    affiche_liste (Smap.find "State" map)
 
 let compile_program (p : (pclas list)) ofile mMeth cmain =
   let codefun, codedesc, _, ordreMeth, ordreVar, mapFoncNommees = List.fold_left compile_class (nop, nop, mMeth, Smap.empty, Smap.empty, Smap.empty) (p) in
