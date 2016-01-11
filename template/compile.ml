@@ -38,7 +38,7 @@ let normalise map id =
     Smap.add id [] map
 
 let estMethDe nom classeId mMeth = 
-	(*Smap.mem classeId mMeth &&*) (List.exists (fun x -> x = nom) (List.map getMethName (Smap.find classeId mMeth)))
+	Smap.mem classeId mMeth && (List.exists (fun x -> x = nom) (List.map getMethName (Smap.find classeId mMeth)))
 
 let nonOverMeth mMeth ident = 
     (*if Smap.mem ident mMeth then*)
@@ -405,7 +405,7 @@ let affiche_liste l =
 
 let debug_affiche_ordreMeth map = 
     Printf.printf "debug\n";
-    affiche_liste (Smap.find "State" map)
+    affiche_liste (Smap.find "Main" map)
 
 let compile_program (p : (pclas list)) ofile mMeth cmain =
   let codefun, codedesc, _, ordreMeth, ordreVar, mapFoncNommees = List.fold_left compile_class (nop, nop, mMeth, Smap.empty, Smap.empty, Smap.empty) (p) in

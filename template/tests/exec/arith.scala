@@ -1,4 +1,6 @@
 object Main {
+    var x=0;
+
   def main(args: Array[String]) {
     print(1 + 2 * 3); print("\n");
     print(- 2 * 3); print("\n");
