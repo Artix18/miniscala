@@ -46,7 +46,7 @@ let rec ajouteMethADesc mMeth (ident:string) idPere (listeMeth:string list) =
 let rec compileConstruct ident idPere expr_pere plnames decalTas ordreVar ordreMeth =
 	(*il me semble que la pile contient directement les args en bas à décal + 24 (en effet, à +8 rbp saved, à +16 adr retour). On sq l'objet est en bas de la pile *)
 	let posTas = 8*(List.length plnames)+24 in
-	let debutPile = 24 in 
+	let debutPile = 16 in (*j'aurais dit 24 mais ça marche que avec 16*)
 	let res = 
 		label ("C_"^ident) ++
 		pushq (reg rbp) ++
@@ -211,7 +211,7 @@ and compile_expr typd_exp env positionAlloc ordreVar ordreMeth =
                                 (if estInt (snd texpr_print) then
                                     call "print_int"
                                  else
-                                    call "print_int" (*on laisse print_int pour debug*)
+                                    call "print_string" (*on laisse print_int pour debug*)
                                 ) ++
                                 pushq (imm 0) (* unit *)
                              in
