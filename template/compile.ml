@@ -42,15 +42,23 @@ let estMethDe nom classeId mMeth =
 
 let nonOverMeth mMeth ident = 
     (*if Smap.mem ident mMeth then*)
-	    List.map getMethName (List.filter isOver (Smap.find ident mMeth))
+    let filtre truc = 
+        List.filter (fun x -> not (isOver x)) truc
+    in
+	    (List.map getMethName (filtre (Smap.find ident mMeth)),
+	    List.map (fun x -> ((getMethName x),"M_"^ident^"_"^(getMethName x))) (filtre (Smap.find ident mMeth)))
 	(*else []*)
 
+let prendreCelleDe idPere idMeth map = 
+    snd (List.find (fun (a,b) -> a=idMeth) (Smap.find idPere map))
+
 (* c'est pas mMeth qu'il faut mais une map avec uniquement les méthodes de la classe et pas celles de ses parents *)
-let rec ajouteMethADesc mMeth (ident:string) idPere (listeMeth:string list) =
+let rec ajouteMethADesc mMeth (ident:string) idPere (listeMeth:string list) mapFoncNommees =
 	match listeMeth with
-	| [] -> let l = (nonOverMeth mMeth ident) in l,(List.fold_left (fun m x -> address [("M_"^ident^"_"^x)] ++ m) (nop) l)
-	| a::b -> let lm,c = ajouteMethADesc mMeth ident idPere b in 
-        a::lm, (address ([if estMethDe a ident mMeth then "M_"^ident^"_"^a else "M_"^idPere^"_"^a])) ++ c
+	| [] -> let l,fnl = (nonOverMeth mMeth ident) in l,(List.fold_left (fun m x -> address [("M_"^ident^"_"^x)] ++ m) (nop) l),fnl
+	| a::b -> let lm,c,fnl = ajouteMethADesc mMeth ident idPere b mapFoncNommees in 
+	    let foncNommee = if estMethDe a ident mMeth then "M_"^ident^"_"^a else prendreCelleDe idPere a mapFoncNommees in
+        a::lm, (address ([foncNommee])) ++ c, (a,foncNommee)::fnl
 
 let rec compileConstruct ident idPere expr_pere plnames decalTas ordreVar ordreMeth =
 	(*il me semble que la pile contient directement les args en bas à décal + 16 (en effet, à +0 rbp saved, à +8 adr retour). On sq l'objet est en bas de la pile *)
@@ -88,7 +96,7 @@ and getCstVal cst = match cst with
 
 and combienIeme id liste = 
 	match liste with
-	| [] -> assert(false)
+	| [] -> Printf.printf "gros soucis ici, on cherchait %s" id;assert(false)
 	| p::q -> if p=id then 0 else 1+(combienIeme id q)
 
 (* Valeur de retour : 'a ast, le résultat se trouve en haut de pile *)
@@ -149,10 +157,14 @@ and compile_expr typd_exp env positionAlloc ordreVar ordreMeth =
                                    let PLaccess(obj_expr, ident) = lv in
                                    let ceobj = compile_expr obj_expr env positionAlloc ordreVar ordreMeth in
                                    let (nom_classe, _,_) = (snd obj_expr) in
+                                   let positionFonc = combienIeme ident (Smap.find nom_classe ordreMeth) in
                                    let code = 
                                        ceobj ++ (*attention à this dans env /!\ TODO*)
+                                       movq (ind ~ofs:0 rsp) (reg r15) ++ (*j'utilise pas r15 normalement*)
                                        (List.fold_left (fun c x -> c ++ (compile_expr x env positionAlloc ordreVar ordreMeth)) (nop) lexp_list) ++
-                                       call ("M_"^nom_classe^"_"^ident) ++
+                                       movq (ind ~ofs:0 r15) (reg r15) ++
+                                       movq (ind ~ofs:(8*positionFonc+8) r15) (reg rbx) ++
+                                       call_star (reg rbx) ++ (* call ("M_"^nom_classe^"_"^ident) ++*)
                                        popn (8+8*(List.length lexp_list)) ++
                                        pushq (reg rax) (*valeur de retour*)
                                    in
@@ -320,14 +332,15 @@ and compileDecl classe decl reste newFun ordreVar debutConstruct ordreMeth posTa
 
 (*ordreVar contient toutes les variables d'une classe (ie les siennes et celles de ses parents*)
 
-let compile_class (codefun, codedesc, mMeth, ordreMeth, ordreVar) (PClass(ident,pl,(typ_pere, lexprl),pdecl_l)) = 
+let compile_class (codefun, codedesc, mMeth, ordreMeth, ordreVar, map_fonc_nommees) (PClass(ident,pl,(typ_pere, lexprl),pdecl_l)) = 
 	let (idPere,_,_)=typ_pere in
 	let ordreMeth = normalise ordreMeth idPere in
 	let ordreVar = normalise ordreVar idPere in
 	let ordreMeth = normalise ordreMeth ident in (*inutile ?*)
 	let mMeth = normalise mMeth ident in
 
-	let lm, cd = (ajouteMethADesc mMeth ident idPere (Smap.find idPere ordreMeth)) in
+	let lm, cd, liste_fonc_nommees = (ajouteMethADesc mMeth ident idPere (Smap.find idPere ordreMeth) map_fonc_nommees) in
+	let map_fonc_nommees = Smap.add ident liste_fonc_nommees map_fonc_nommees in
 	let newDesc = 
 		label ("D_"^ident) ++ address [("D_"^idPere)] ++ cd ++ codedesc
 	in
@@ -341,7 +354,7 @@ let compile_class (codefun, codedesc, mMeth, ordreMeth, ordreVar) (PClass(ident,
     let newFun,ordreVar,constructFini = compileDecl_l ident pdecl_l codefun ordreVar debutConstruct newOrdreMeth posTas in
 	let newFun = constructFini ++ movq (reg rbp) (reg rsp) ++ popq rbp ++ ret ++ newFun in
 
-	newFun, newDesc, mMeth, newOrdreMeth, ordreVar
+	newFun, newDesc, mMeth, newOrdreMeth, ordreVar, map_fonc_nommees
 
 let compileMain classe ordreVar ordreMeth = 
 	let code = 
@@ -375,7 +388,7 @@ let rec dernier l = match l with
     | a::b -> dernier b
 
 let compile_program (p : (pclas list)) ofile mMeth cmain =
-  let codefun, codedesc, _, ordreMeth, ordreVar = List.fold_left compile_class (nop, nop, mMeth, Smap.empty, Smap.empty) (p) in
+  let codefun, codedesc, _, ordreMeth, ordreVar, mapFoncNommees = List.fold_left compile_class (nop, nop, mMeth, Smap.empty, Smap.empty, Smap.empty) (p) in
   let codemain = compileMain (dernier p) ordreVar ordreMeth in
   let p =
     { text =
