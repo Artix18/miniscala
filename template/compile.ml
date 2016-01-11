@@ -240,7 +240,7 @@ and compile_expr typd_exp env positionAlloc ordreVar ordreMeth =
                                     label ("end_"^magic_id)
                                 in
                                 code
-    | PEwhile(lexpr, ldo) -> let ccond = compile_expr lexpr env positionAlloc ordreVar ordreMeth in let cdo = compile_expr ldo env positionAlloc ordreVar ordreMeth in
+    | PEwhile(lexpr, ldo) -> let ccond = compile_expr lexpr env positionAlloc ordreVar ordreMeth in let cdo = compile_expr ldo env (positionAlloc) ordreVar ordreMeth in (*+8 ????*)
                             let magic_id = string_of_int (!super_compteur) in
                             super_compteur := (!super_compteur) + 1;
                             let code =
@@ -250,9 +250,9 @@ and compile_expr typd_exp env positionAlloc ordreVar ordreMeth =
                                 testq (reg rax) (reg rbx) ++
                                 je ("end_while_"^magic_id) ++
                                 label ("cond_while_"^magic_id) ++
-                                ccond ++
                                 cdo ++
                                 popq rax ++
+                                ccond ++
                                 popq rax ++
                                 movq (imm 1) (reg rbx) ++
                                 testq (reg rax) (reg rbx) ++
