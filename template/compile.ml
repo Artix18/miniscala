@@ -68,6 +68,7 @@ let rec compileConstruct ident idPere expr_pere plnames decalTas ordreVar ordreM
 		label ("C_"^ident) ++
 		pushq (reg rbp) ++
 		movq (reg rsp) (reg rbp) ++
+		pushq (reg r14) ++
 		
 		(*on empile this et les arguments du construct du pere et on l'appelle*)
 		pushq (ind ~ofs:(posTas) rbp) ++
@@ -310,8 +311,8 @@ and compileDecl classe decl reste newFun ordreVar debutConstruct ordreMeth posTa
         let expr = (pexpr, ptyp) in
         let ordreVar = normalise ordreVar classe in
 	    let ordreVar = Smap.add classe ((Smap.find classe ordreVar)@[ident]) ordreVar in
-	    (* TODO : allouer de la place pour l'expression *)
-	    let ce = compile_expr expr (Smap.add "this" posTas Smap.empty) 8 ordreVar ordreMeth in (*le res est en haut de la pile, mettons le dans rbx*)
+	    (* TODO : allouer de la place pour l'expression *) (*8 : rbp, 16: r14*)
+	    let ce = compile_expr expr (Smap.add "this" posTas Smap.empty) 16 ordreVar ordreMeth in (*le res est en haut de la pile, mettons le dans rbx*)
 	    let debutConstruct = debutConstruct ++ ce ++ popq rbx ++ (movq (reg rbx) (ind ~ofs:(8*(List.length (Smap.find classe ordreVar))) r14)) in
 	    (*TODO : libérer la place *)
 	    compileDecl_l classe reste newFun ordreVar debutConstruct ordreMeth posTas
@@ -344,6 +345,7 @@ let compile_class (codefun, codedesc, mMeth, ordreMeth, ordreVar, map_fonc_nomme
 	let newDesc = 
 		label ("D_"^ident) ++ address [("D_"^idPere)] ++ cd ++ codedesc
 	in
+	let lm = List.rev lm in
 	let newOrdreMeth = Smap.add ident lm ordreMeth in
 
 	let lpere = (Smap.find idPere ordreVar) in
@@ -352,7 +354,7 @@ let compile_class (codefun, codedesc, mMeth, ordreMeth, ordreVar, map_fonc_nomme
 	(*Attention, les vars d'une classe sont allouées sur le tas*)
 	let debutConstruct,posTas = (compileConstruct ident idPere lexprl plnames ((List.length lpere)*8) ordreVar ordreMeth) in
     let newFun,ordreVar,constructFini = compileDecl_l ident pdecl_l codefun ordreVar debutConstruct newOrdreMeth posTas in
-	let newFun = constructFini ++ movq (reg rbp) (reg rsp) ++ popq rbp ++ ret ++ newFun in
+	let newFun = constructFini ++ popq r14 ++ movq (reg rbp) (reg rsp) ++ popq rbp ++ ret ++ newFun in
 
 	newFun, newDesc, mMeth, newOrdreMeth, ordreVar, map_fonc_nommees
 
@@ -389,8 +391,16 @@ let rec dernier l = match l with
     | [a] -> a
     | a::b -> dernier b
 
+let affiche_liste l = 
+    List.iter (fun x -> Printf.printf "%s\n" x) l
+
+let debug_affiche_ordreMeth map = 
+    Printf.printf "debug\n";
+    affiche_liste (Smap.find "Main" map)
+
 let compile_program (p : (pclas list)) ofile mMeth cmain =
   let codefun, codedesc, _, ordreMeth, ordreVar, mapFoncNommees = List.fold_left compile_class (nop, nop, mMeth, Smap.empty, Smap.empty, Smap.empty) (p) in
+  debug_affiche_ordreMeth ordreMeth;
   let codemain = compileMain (dernier p) ordreVar ordreMeth in
   let p =
     { text =
