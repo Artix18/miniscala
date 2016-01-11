@@ -1,4 +1,4 @@
-class Mdr
+class Mdr(z : Int)
 {
 	var x = 5;
 	def m() { }
@@ -6,7 +6,7 @@ class Mdr
 
 object Main {
   def main(args: Array[String]) {
-    new Mdr(); ()
+    var y = new Mdr(4); print(y.z)
   }
 }
 

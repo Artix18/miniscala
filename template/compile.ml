@@ -114,7 +114,7 @@ and compile_expr typd_exp env positionAlloc ordreVar ordreMeth =
     | PEnew(ptyp,lexp_list) -> let (nom_classe,_,_)=ptyp in let lcode = List.map (fun x -> compile_expr x env positionAlloc ordreVar ordreMeth) lexp_list in
                                               let code = 
                                                 (* TODO la taille de la classe *)
-                                                movq (imm (8+8*(List.length (Smap.find nom_classe ordreVar)))) (reg rdi) ++
+                                                movq (imm (16+8*(List.length (Smap.find nom_classe ordreVar)))) (reg rdi) ++
                                                 call "malloc" ++
                                                 movq (ilab ("D_"^nom_classe)) (ind ~ofs:0 rax) ++ (*met le descripteur de classe, pas sûr*)
                                                 pushq (reg rax) ++
