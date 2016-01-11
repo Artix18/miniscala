@@ -96,7 +96,7 @@ and compile_expr typd_exp env positionAlloc ordreVar ordreMeth =
         (match lv with
             | PLident(ident) ->
                 if Smap.mem ident env
-                then pushq (ind ~ofs:(Smap.find ident env) rsp)
+                then pushq (ind ~ofs:(Smap.find ident env) rbp)
 	            else assert(false) (*compile_expr (PEaccess(PLaccess((PEthis), ident)), dummy_inter) env positionAlloc*) (*je crois qu'on a pas besoin*)
             | PLaccess(typd_expr,ident) -> 
 	            (* coucou, TODO, alloue *)
@@ -265,9 +265,9 @@ and compileDecl classe decl reste newFun ordreVar debutConstruct ordreMeth =
 		let code = 
 			label ("M_"^classe^"_"^ident) ++
 		    pushq (reg rbp) ++
-			movq (reg rsp) (reg rbp) ++ pushn fpmax ++
+			movq (reg rsp) (reg rbp) ++
 			ce ++ popq rax ++
-			popn fpmax ++ popq rbp ++ ret
+			movq (reg rbp) (reg rsp) ++ popq rbp ++ ret
 		in
 		let newFun = newFun ++ code in
 		compileDecl_l classe reste newFun ordreVar debutConstruct ordreMeth
