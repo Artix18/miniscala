@@ -61,7 +61,7 @@ let rec compileConstruct ident idPere expr_pere plnames decalTas ordreVar ordreM
 
 		movq (ind ~ofs:(posTas) rbp) (reg rax) ++ (*decalage sur le tas : +8 car il y a le desc de classe, +8*nbVarParents=decalTas *)
 		movq (reg rax) (reg r14) ++
-        (fst (List.fold_left (fun (c,decal) x -> (movq (ind ~ofs:(debutPile+decal) rbp) (reg rbx)) ++ (movq (reg rbx) (ind ~ofs:(decal+8+decalTas) rax)) ++ c, decal+8) (nop, 0) (List.rev plnames))
+        (fst (List.fold_left (fun (c,decal) x -> (movq (ind ~ofs:(debutPile+decal) rbp) (reg rbx)) ++ (movq (reg rbx) (ind ~ofs:(8+8*(combienIeme x (Smap.find ident ordreVar))) rax)) ++ c, decal+8) (nop, 0) (List.rev plnames))
 		)
 	in
 	res
