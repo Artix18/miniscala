@@ -1,15 +1,22 @@
-Projet : compilateur miniscala
+Projet : compilateur petitscala
 Groupe : Jules Pondard et Hugo Manet
 
-Résumé de notre travail : Nous avons implémenté chacune des étapes indiquées dans la description du projet, à l'exception de la vérification de quelques conditions particulières sur le Main, et de quelques points sur la variance (corrigé).
-Quelques points nous ont paru ambigus, notamment vis à vis de la localité de certaines variables. Dans ces quelques cas, nous nous sommes reportés au comportement de Scala pour trancher.
-Nous avons commi quelques erreurs, notamment au début nous utilisions des structures qu'il s'est vite avéré difficile à maintenir (une map qui à un type abstrait associait un type concret), mais aussi des oublis de décorations et une mauvaise manière de gérer les types de base.
-Il reste un bug dans la localité des variables de bloc (corrigé).
+Résumé de notre travail : Nous nous sommes inspirés du cours sur la compilation des langages orientés objets pour coder notre compilateur de petit scala.
+Nous avons commencé par implémenter les descripteurs de classe tels que décrits dans le sujet, puis nous avons compilé l'allocation d'un objet Main pour pouvoir commencer
+à tester. Nous avons rapidement modifié notre code pour considérer que Main devait être compilée exactement comme les autres classes. Ainsi une implémentation minimaliste des
+déclarations, qui ne déclarait jamais de variables, nous avons pu commencer à compiler les expressions. Ensuite nous avons ajouté les membres, comme si ils faisaient
+partie du constructeur, et enfin nous avons compilé les variables et les call.
 
-Ajouté : il reste probablement un bug sur les paramètres de constructeurs de classes grands-parents...
+Appréciation du sujet : Cette partie du sujet était très amusante ; nous prenions beaucoup de plaisir à voir que notre compilateur produisait de plus en plus de code
+correct. Parfois, quelques segfault. Nous avons tenté de débuger avec Nemiver mais ne savons pas comment résoudre le problème de "fichier malloc.c non trouvé", qui
+peut être résolu simplement dans gdb en lui indiquant de "sortir d'ici". Gdb a été un bon allié pour remarquer que nos constructeurs recopiaient n'importe comment les arguments, malheureusement il n'est pas très "visuel".
 
-Appréciation du sujet : Le typage du scala nous a vraiment surpris. Nous avons du y passer de nombreuses heures, parfois jusqu'à tard le soir, mais nous sommes plutôt satisfaits du résultat. Des expressions comme "print(if(true) then return else 2)" sont remarquablement élégantes.
+Choix : Nous avons jugé utile d'introduire quelques registres intermédiaires à certains endroits, notamment r14 qui doit survivre non seulement à l'appel des méthodes mais aussi à celui des expressions dans notre code !
+Nous n'avons pas codé de fonction alloc, qui aurait permi un peu plus d'efficacité que de push et pop variable par variable à chaque fois..
+Nous avons choisi de considérer les variables du constructeur comme publiques, ce qui contredit le vrai scala et donne lieu à des ambiguités si l'on veut modifier une variable x dans un père, alors qu'elle est redéfinie dans un fils.
 
-Suite du projet : Il nous faudra terminer quelques détails et tester davantage le code que nous avons produit. Nous aurions aimé, si l'on avait eu plus de temps, récupérer plus d'exemples de code Scala sur internet et regarder si tout se passe comme prévu en affichant étape par étape ce que "pense" notre programme.
+Conclusion : nous passons tous les tests fournis (100% !), et certains petits bidouillages à la main. Nous passons tous les tests mis en commun par Théophile (à l'adresse https://compil.tobast.fr/) à l'exception du notre sur les noms des classes et méthodes... Nous passons en particulier les tests amusants comme le Quine petit-scala.
+
+Merci pour ce projet :)
 
 Lien vers le github : https://github.com/Artix18/miniscala
