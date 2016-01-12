@@ -71,16 +71,17 @@ let rec compileConstruct ident idPere expr_pere plnames decalTas ordreVar ordreM
 		pushq (reg r14) ++
 		pushq (reg r15) ++
 		
-		(*on empile this et les arguments du construct du pere et on l'appelle*)
-		pushq (ind ~ofs:(posTas) rbp) ++
-		(List.fold_left (fun c x -> c++(compile_expr x Smap.empty 0 ordreVar ordreMeth)) nop expr_pere) ++
-		call ("C_"^idPere) ++
-		(*TODO : continuer ce que j'ai commencé ici *)
-		popn (8+8*(List.length expr_pere)) ++ (*pop this et les arguments*)
-
+		(*il faut d'abord init ses variables avant d'appeler le constructeur du père *)
 		movq (ind ~ofs:(posTas) rbp) (reg rax) ++ (*decalage sur le tas : +8 car il y a le desc de classe, +8*nbVarParents=decalTas *)
 		movq (reg rax) (reg r14) ++
-        (fst (List.fold_left (fun (c,decal) x -> (movq (ind ~ofs:(debutPile+decal) rbp) (reg rbx)) ++ (movq (reg rbx) (ind ~ofs:(8+8*(combienIeme x (Smap.find ident ordreVar))) rax)) ++ c, decal+8) (nop, 0) (List.rev plnames))
+        (fst (List.fold_left (fun (c,decal) x -> (movq (ind ~ofs:(debutPile+decal) rbp) (reg rbx)) ++ (movq (reg rbx) (ind ~ofs:(8+8*(combienIeme x (Smap.find ident ordreVar))) rax)) ++ c, decal+8) (nop, 0) (List.rev plnames)) ++
+		
+		(*on empile this et les arguments du construct du pere et on l'appelle*)
+		pushq (ind ~ofs:(posTas) rbp) ++
+		(fst (List.fold_left (fun (c,decal) x -> c++(compile_expr x (Smap.add "this" (-24) Smap.empty) decal ordreVar ordreMeth),(decal+8)) (nop,32) expr_pere)) ++
+		call ("C_"^idPere) ++
+		popn (8+8*(List.length expr_pere)) (*pop this et les arguments*)
+
 		)
 	in
 	res,posTas
@@ -166,7 +167,7 @@ and compile_expr typd_exp env positionAlloc ordreVar ordreMeth =
                                        pushq (reg r15) ++ (*je sauvegarde r15 *)
                                        pushq (reg rax) ++
                                        movq (ind ~ofs:0 rsp) (reg r15) ++
-                                       (List.fold_left (fun c x -> c ++ (compile_expr x env (positionAlloc+16) ordreVar ordreMeth)) (nop) lexp_list) ++ (* +8 pour this, +8 pour r15 saved*)
+                                       (fst (List.fold_left (fun (c,decal) x -> c ++ (compile_expr x env (positionAlloc+decal) ordreVar ordreMeth),(decal+8)) (nop,16) lexp_list)) ++ (* +8 pour this, +8 pour r15 saved*)
                                        movq (ind ~ofs:0 r15) (reg r15) ++
                                        movq (ind ~ofs:(8*positionFonc+8) r15) (reg rbx) ++
                                        call_star (reg rbx) ++ (* call ("M_"^nom_classe^"_"^ident) ++*)
