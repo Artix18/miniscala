@@ -189,7 +189,7 @@ let compose sigma sigmaPrime = (*sigma rond sigmaPrime*)
 
 let checkMeth nom_classe meth methC =
     let (lv, ArgsType(args_type),liste_expr) = meth in
-    let Laccess (exp, mname, inter) = lv in
+    let (exp, mname, inter) = (match lv with | Laccess(a,b,c) -> (a,b,c) | _ -> assert(false)) in
     if not (Smap.mem nom_classe methC)
         then raise (Unbound_error ("Class " ^ nom_classe ^ " has no method, thus no method named " ^ mname ^ ".", (fst(snd exp), snd inter)));
     
@@ -357,7 +357,7 @@ let rec            type_expr mapVariance vPC env loc_var classesDeclarees membre
         let tClasse = appRec (Eaccess(lv), snd loc_expr) in ()
         with | _ -> print_string (getIdentLv lv); failwith "ici");*)
         
-        let Laccess(lvexp, nom_meth,inter) = lv in
+        let (lvexp, nom_meth,inter) = (match lv with |Laccess(a,b,c) -> (a,b,c) | _ -> assert(false)) in
         
         let plvexp,tClasse = appRec lvexp in
 
@@ -420,7 +420,7 @@ let rec            type_expr mapVariance vPC env loc_var classesDeclarees membre
                 in
                 let re, rt = type_expr mapVariance vPC nenv (!nextLV) classesDeclarees membresClasse mContraintes methC (Ebloc (q), (!nextPo, snd (snd loc_expr)))
                 in
-                let PEbloc(rlist)=re in PEbloc(pinstr::rlist),rt
+                let rlist=(match re with |PEbloc(a) -> a |_ -> assert(false)) in PEbloc(pinstr::rlist),rt
         )
    
 let varName var = 
@@ -565,7 +565,6 @@ let rec eqPTBornes classesDeclarees mContraintes x y = match x,y with
     |PTbigger(_,_),_ -> eqPTBornes classesDeclarees mContraintes y x
     |_,PTsmaller(_,_) -> eqPTBornes classesDeclarees mContraintes y x
     |PTsmaller(a,t2),_ -> eqTypes classesDeclarees mContraintes t2 (basicType classesDeclarees "Any") && eqPTBornes classesDeclarees mContraintes (PTsimple(a)) y
-    | _,_ -> false
 
 let checkOverPT meth methPere nom_classe classesDeclarees mContraintes = 
     let (_,nom,ptl,pl,rt,_,inter) = meth in
@@ -663,7 +662,7 @@ let rec type_class vPC classesDeclarees membresClasse mContraintes methC classe 
     rvMembresClasse := ajouteVarConstruct nom_classe (classParams classe) (!rvMembresClasse);
 
     (*step 4*)
-    let PEnew(_,pexp_list),_ = type_expr mapVariance vPC newEnv [] newClassesDeclarees membresClasse newMContraintes methC (Enew(tpName, ArgsType(tpList), exp_list),dummy_inter) in
+    let pexp_list = (match (type_expr mapVariance vPC newEnv [] newClassesDeclarees membresClasse newMContraintes methC (Enew(tpName, ArgsType(tpList), exp_list),dummy_inter)) with |PEnew(_,a),_ -> a |_->assert(false)) in
 
     (*step 5*)
     let curVDecl = ref ((lPAFromPL pList)@(getVarOfCl tpName classesDeclarees membresClasse)) in
@@ -678,7 +677,7 @@ let rec type_class vPC classesDeclarees membresClasse mContraintes methC classe 
                 raise (Unicity_error(Printf.sprintf "Variable \"%s\" already declared in the current class \"%s\" (or its constructor, or its parents)." (varName var) nom_classe, inter));
             curVDecl := (varName var)::(!curVDecl);
 
-            let PEbloc(PIdef(rvar)::_), resTyp = type_expr mapVariance vPC newEnv [] newClassesDeclarees newMembresClasse newMContraintes newMethC (Ebloc([Idef(var); Iexpr(Eaccess(Lident(varName var,dummy_inter)), dummy_inter)]),dummy_inter) in
+            let rvar, resTyp = (match (type_expr mapVariance vPC newEnv [] newClassesDeclarees newMembresClasse newMContraintes newMethC (Ebloc([Idef(var); Iexpr(Eaccess(Lident(varName var,dummy_inter)), dummy_inter)]),dummy_inter)) with |PEbloc(PIdef(rvar)::_),resTyp -> rvar,resTyp | _ -> assert(false)) in
             
             let nnMCl = ajouteMembre newMembresClasse nom_classe (varName var, varConst var, resTyp) in
             
@@ -738,7 +737,7 @@ let verifMainValide meth classesDeclarees mContraintes =
         raise (Unicity_error(Printf.sprintf "Function main should have exactly one parameter, of type Array[String].", inter));
     if (not (eqTypes classesDeclarees mContraintes rv (basicType classesDeclarees "Unit"))) then
         raise (Unicity_error(Printf.sprintf "Function main's return type should be unit.", inter));
-    let [(_,typ)] = pl in
+    let typ = (match pl with |[(_,typ)] -> typ |_ -> assert(false)) in
     if (not (eqTypes classesDeclarees mContraintes typ ("Array", dummy_inter, ArgsType([("String",dummy_inter,ArgsType([]))])))) then
         raise (Unicity_error(Printf.sprintf "Function main should have exactly one parameter, of type Array[String].", inter));
     true

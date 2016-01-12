@@ -7,13 +7,16 @@ echo "exec/"
 
 for f in exec/*.scala; do
     max=`expr $max + 1`;
+    filename="${f%.*}";
+    filenamewopath=$(basename "$filename");
+    fasm="$filenamewopath"".s";
     echo "* ""$f"
     rm -f out
-    ../pscala $f && gcc ./lol.s;
+    ../pscala $f && gcc ./$fasm;
+    rm -f $fasm;
     ./a.out > out;
     if [ $? -eq 0 ]
     then
-        filename="${f%.*}";
         fout="$filename"".out";
         rm -f truc;
         diff out $fout > truc;
