@@ -323,7 +323,7 @@ and compileDecl classe decl reste newFun ordreVar debutConstruct ordreMeth posTa
 	    compileDecl_l classe reste newFun ordreVar debutConstruct ordreMeth posTas
     | PDmeth(methode) ->
         let (ident, pl, expr) = methode in
-		let env,decal = List.fold_left (fun (ev,nxt) x -> Smap.add x nxt ev, nxt+8) (Smap.empty, 16) (getPlNames pl) in
+		let env,decal = List.fold_left (fun (ev,nxt) x ->(* Printf.printf "debug : meth %s has %s\n" ident x;*)Smap.add x nxt ev, nxt+8) (Smap.empty, 16) (List.rev (getPlNames pl)) in
 		let env = Smap.add "this" decal env in
         let ce = compile_expr expr env 24 ordreVar ordreMeth in (*rbp saved + r15 saved + r14 saved *)
 		let code = 
