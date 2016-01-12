@@ -197,7 +197,7 @@ and compile_expr typd_exp env positionAlloc ordreVar ordreMeth =
                               pushq (reg rax)
                             in
                             code
-    | PEbinop(binop,lexp1,lexp2)-> let v1 = compile_expr lexp1 env positionAlloc ordreVar ordreMeth in let v2 = compile_expr lexp2 env positionAlloc ordreVar ordreMeth in
+    | PEbinop(binop,lexp1,lexp2)-> let v1 = compile_expr lexp1 env positionAlloc ordreVar ordreMeth in let v2 = compile_expr lexp2 env (positionAlloc+8) ordreVar ordreMeth in
                                     let codeLog = (match binop with
                                               | Bor -> (compile_expr (PEif(lexp1, (PEcst(Cbool(true)),dummy_typ), lexp2), dummy_typ) env positionAlloc ordreVar ordreMeth)
                                               | Band -> (compile_expr (PEif(lexp1, lexp2, (PEcst(Cbool(false)),dummy_typ)), dummy_typ) env positionAlloc ordreVar ordreMeth)
