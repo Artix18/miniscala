@@ -405,8 +405,8 @@ let affiche_liste l =
     List.iter (fun x -> Printf.printf "%s\n" x) l
 
 let debug_affiche_ordreMeth map = 
-    Printf.printf "debug\n";
-    affiche_liste (Smap.find "Main" map)
+    (*Printf.printf "debug\n";
+    affiche_liste (Smap.find "Main" map)*) ()
 
 let compile_program (p : (pclas list)) ofile mMeth cmain =
   let codefun, codedesc, _, ordreMeth, ordreVar, mapFoncNommees = List.fold_left compile_class (nop, nop, mMeth, Smap.empty, Smap.empty, Smap.empty) (p) in
