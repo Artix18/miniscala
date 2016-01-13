@@ -3,8 +3,6 @@ open Ast
 open Format
 open Typage
 
-(* WARNING : en fait j'ai compris que j'avais un truc très faux : rsp pointe vers le dernier et pas vers après, donc les decal c'est tous des 16 et pas 24 *)
-
 let (genv : (string, unit) Hashtbl.t) = Hashtbl.create 42
 let sz = 8
 
@@ -20,9 +18,6 @@ let pushn n = subq (imm n) (reg rsp)
 let super_compteur = ref 0
 
 let dummy_typ = ("dummy", dummy_inter, ArgsType([]))
-
-let compile_decl codefun decl =
-	assert(false)
 
 let isOver meth = 
 	let over,_,_,_,_,_,_ = meth in
@@ -46,7 +41,7 @@ let nonOverMeth mMeth ident =
         List.filter (fun x -> not (isOver x)) truc
     in
 	    (List.map getMethName (filtre (Smap.find ident mMeth)),
-	    List.map (fun x -> ((getMethName x),"M_"^ident^"_"^(getMethName x))) (filtre (Smap.find ident mMeth)))
+	    List.map (fun x -> ((getMethName x),"M_$"^ident^"_$"^(getMethName x))) (filtre (Smap.find ident mMeth)))
 	(*else []*)
 
 let prendreCelleDe idPere idMeth map = 
@@ -55,9 +50,9 @@ let prendreCelleDe idPere idMeth map =
 (* c'est pas mMeth qu'il faut mais une map avec uniquement les méthodes de la classe et pas celles de ses parents *)
 let rec ajouteMethADesc mMeth (ident:string) idPere (listeMeth:string list) mapFoncNommees =
 	match listeMeth with
-	| [] -> let l,fnl = (nonOverMeth mMeth ident) in (List.rev l),(List.fold_left (fun m x -> address [("M_"^ident^"_"^x)] ++ m) (nop) l),fnl
+	| [] -> let l,fnl = (nonOverMeth mMeth ident) in (List.rev l),(List.fold_left (fun m x -> address [("M_$"^ident^"_$"^x)] ++ m) (nop) l),fnl
 	| a::b -> let lm,c,fnl = ajouteMethADesc mMeth ident idPere b mapFoncNommees in 
-	    let foncNommee = if estMethDe a ident mMeth then "M_"^ident^"_"^a else prendreCelleDe idPere a mapFoncNommees in
+	    let foncNommee = if estMethDe a ident mMeth then "M_$"^ident^"_$"^a else prendreCelleDe idPere a mapFoncNommees in
         a::lm, (address ([foncNommee])) ++ c, (a,foncNommee)::fnl
 
 let rec compileConstruct ident idPere expr_pere plnames decalTas ordreVar ordreMeth =
@@ -65,7 +60,7 @@ let rec compileConstruct ident idPere expr_pere plnames decalTas ordreVar ordreM
 	let posTas = 8*(List.length plnames)+16 in
 	let debutPile = 16 in
 	let res = 
-		label ("C_"^ident) ++
+		label ("C_$"^ident) ++
 		pushq (reg rbp) ++
 		movq (reg rsp) (reg rbp) ++
 		pushq (reg r14) ++
@@ -79,7 +74,7 @@ let rec compileConstruct ident idPere expr_pere plnames decalTas ordreVar ordreM
 		(*on empile this et les arguments du construct du pere et on l'appelle*)
 		pushq (ind ~ofs:(posTas) rbp) ++
 		(fst (List.fold_left (fun (c,decal) x -> c++(compile_expr x (Smap.add "this" (-24) Smap.empty) decal ordreVar ordreMeth),(decal+8)) (nop,32) expr_pere)) ++
-		call ("C_"^idPere) ++
+		call ("C_$"^idPere) ++
 		popn (8+8*(List.length expr_pere)) (*pop this et les arguments*)
 
 		)
@@ -180,10 +175,10 @@ and compile_expr typd_exp env positionAlloc ordreVar ordreMeth =
                                                 (* la taille de la classe *)
                                                 movq (imm (8+8*(List.length (Smap.find nom_classe ordreVar)))) (reg rdi) ++
                                                 call "malloc" ++
-                                                movq (ilab ("D_"^nom_classe)) (ind ~ofs:0 rax) ++ (*met le descripteur de classe, pas sûr*)
+                                                movq (ilab ("D_$"^nom_classe)) (ind ~ofs:0 rax) ++ (*met le descripteur de classe, pas sûr*)
                                                 pushq (reg rax) ++ (* objet, donc le this *)
                                                 (List.fold_left (fun c x -> c ++ x) (nop) lcode) ++
-                                                call ("C_"^nom_classe) ++
+                                                call ("C_$"^nom_classe) ++
                                                 (List.fold_left (fun c x -> c ++ popq rax) (nop) lcode)
                                                 (* pas le dernier pop *)
                                               in
@@ -326,7 +321,7 @@ and compileDecl classe decl reste newFun ordreVar debutConstruct ordreMeth posTa
 		let env = Smap.add "this" decal env in
         let ce = compile_expr expr env 24 ordreVar ordreMeth in (*rbp saved + r15 saved + r14 saved *)
 		let code = 
-			label ("M_"^classe^"_"^ident) ++ (*troll : potentiel pb d'appellation *)
+			label ("M_$"^classe^"_$"^ident) ++ (*troll : potentiel pb d'appellation *)
 		    pushq (reg rbp) ++
 			movq (reg rsp) (reg rbp) ++
 			pushq (reg r15) ++ (*sauvegarde r15*)
@@ -351,7 +346,7 @@ let compile_class (codefun, codedesc, mMeth, ordreMeth, ordreVar, map_fonc_nomme
 	let lm, cd, liste_fonc_nommees = (ajouteMethADesc mMeth ident idPere (Smap.find idPere ordreMeth) map_fonc_nommees) in
 	let map_fonc_nommees = Smap.add ident liste_fonc_nommees map_fonc_nommees in
 	let newDesc = 
-		label ("D_"^ident) ++ address [("D_"^idPere)] ++ cd ++ codedesc
+		label ("D_$"^ident) ++ address [("D_$"^idPere)] ++ cd ++ codedesc
 	in
 	(*let lm = List.rev lm in*)
 	let newOrdreMeth = Smap.add ident lm ordreMeth in
@@ -372,11 +367,11 @@ let compileMain classe ordreVar ordreMeth =
         (* allouer objet de classe Main et appeler main() *)
         movq (imm (8+8*(List.length (Smap.find "Main" ordreVar)))) (reg rdi) ++
         call "malloc" ++
-        movq (ilab "D_Main") (ind ~ofs:0 rax) ++
+        movq (ilab "D_$Main") (ind ~ofs:0 rax) ++
         pushq (reg rax) ++
-        call "C_Main" ++
+        call "C_$Main" ++
         pushq (imm 0) ++
-        call "M_Main_main" ++
+        call "M_$Main_$main" ++
         popq rax ++
         popq rax ++
         movq (imm 0) (reg rax) ++ (* exit *)
@@ -419,7 +414,7 @@ let compile_program (p : (pclas list)) ofile mMeth cmain =
 		call "printf" ++
 		ret ++
         codefun ++
-        label "C_AnyRef" ++
+        label "C_$AnyRef" ++
         ret
         ;
         
@@ -427,7 +422,7 @@ let compile_program (p : (pclas list)) ofile mMeth cmain =
         fst (List.fold_left (fun (code,nb) x -> label (".str_"^(string_of_int nb)) ++ string x ++ code, nb-1)
         ((label ".Sprint_int" ++ string "%d" ++ label ".Sprint_string" ++ string "%s"),(List.length (!liste_str))) (!liste_str))
           ++ codedesc
-          ++ (label "D_AnyRef")
+          ++ (label "D_$AnyRef")
     }
   in
   let f = open_out ofile in
