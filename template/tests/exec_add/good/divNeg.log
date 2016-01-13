@@ -1,0 +1,4 @@
+By: tbastian
+Date: 03 Jan 2016 - 00:44:59
+
+Vérifie que la division d'un négatif est bien gérée (ça me plantait mon Mandelbrot). Si ça affiche 0, vous n'avez pas étendu le signe dans %rdx : voir l'instruction cqto.

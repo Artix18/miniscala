@@ -1,0 +1,4 @@
+By: tbastian
+Date: 30 Dec 2015 - 03:15:16
+
+Identique à call0 dans les tests de base, mais avec des entiers. L'assembleur produit est un peu plus lisible pour le débug.

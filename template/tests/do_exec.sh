@@ -5,7 +5,7 @@ max=0
 
 echo "exec/"
 
-for f in exec/*.scala; do
+for f in exec/*.scala exec_add/good/*.scala; do
     max=`expr $max + 1`;
     filename="${f%.*}";
     filenamewopath=$(basename "$filename");
